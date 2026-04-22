@@ -21,6 +21,7 @@ jobs:
             set -euo pipefail
 
             echo "==> Pulling latest code..."
+            git config --global --add safe.directory /opt/tbc
             cd /opt/tbc
             git pull origin main
 
