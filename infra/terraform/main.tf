@@ -10,7 +10,7 @@ data "hcloud_ssh_key" "admin" {
 # VPS: CCX23 — 4 dedicated vCPU, 16 GB RAM, 80 GB NVMe
 resource "hcloud_server" "tbc" {
   name        = "tbc-prod"
-  server_type = "ccx23"
+  server_type = "cx43"
   image       = "ubuntu-24.04"
   location    = "nbg1"
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
@@ -46,11 +46,27 @@ resource "hcloud_firewall" "tbc" {
   name = "tbc-prod-fw"
 
   rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "22"
-    source_ips = [var.admin_ip]
-    description = "SSH from admin IP"
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "22"
+    source_ips  = ["0.0.0.0/0", "::/0"]
+    description = "SSH from anywhere (key-only auth)"
+  }
+
+  rule {
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "80"
+    source_ips  = ["0.0.0.0/0", "::/0"]
+    description = "HTTP for Let's Encrypt ACME challenge"
+  }
+
+  rule {
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "443"
+    source_ips  = ["0.0.0.0/0", "::/0"]
+    description = "HTTPS public (MCP endpoint + admin)"
   }
 
   dynamic "rule" {
