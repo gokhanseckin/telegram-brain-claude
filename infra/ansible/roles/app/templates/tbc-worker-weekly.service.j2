@@ -1,0 +1,20 @@
+[Unit]
+Description=TBC Worker — Weekly Review scheduler (Sonnet 4.6 batch API)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=tbc
+Group=tbc
+WorkingDirectory=/opt/tbc
+EnvironmentFile=/etc/tbc/env
+ExecStart=uv run python -m services.worker_weekly.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tbc-worker-weekly
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=TBC Ingestion — Telethon userbot, live message stream
+After=network.target postgresql.service ollama.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=tbc
+Group=tbc
+WorkingDirectory=/opt/tbc
+EnvironmentFile=/etc/tbc/env
+ExecStart=uv run python -m services.ingestion.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tbc-ingestion
+
+[Install]
+WantedBy=multi-user.target

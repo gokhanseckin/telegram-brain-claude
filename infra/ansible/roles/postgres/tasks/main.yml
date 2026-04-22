@@ -1,0 +1,116 @@
+---
+# ── Install PostgreSQL 16 from official APT repo ────────────────────────────────
+
+- name: Add PostgreSQL APT signing key
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+
+- name: Add PostgreSQL APT repository
+  apt_repository:
+    repo: "deb https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    state: present
+    filename: pgdg
+
+- name: Update apt cache after adding PostgreSQL repo
+  apt:
+    update_cache: true
+
+- name: Install PostgreSQL 16 and pgvector extension
+  apt:
+    name:
+      - postgresql-16
+      - postgresql-16-pgvector
+      - python3-psycopg2
+    state: present
+
+- name: Enable and start PostgreSQL
+  systemd:
+    name: postgresql
+    enabled: true
+    state: started
+
+# ── Tune postgresql.conf for 16 GB RAM / 4 vCPU ────────────────────────────────
+
+- name: Configure postgresql.conf performance tuning
+  blockinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    marker: "# {mark} ANSIBLE MANAGED — TBC TUNING"
+    block: |
+      # Connection settings
+      listen_addresses = 'localhost'
+      max_connections = 50
+
+      # Memory tuning (16 GB RAM)
+      shared_buffers = 4GB
+      effective_cache_size = 12GB
+      maintenance_work_mem = 1GB
+      work_mem = 80MB
+
+      # Checkpoint tuning
+      wal_buffers = 64MB
+      checkpoint_completion_target = 0.9
+      min_wal_size = 1GB
+      max_wal_size = 4GB
+
+      # Query planner
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+
+      # Logging
+      log_min_duration_statement = 1000
+      log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+  notify: Restart PostgreSQL
+
+- name: Restrict PostgreSQL to loopback in pg_hba.conf
+  blockinfile:
+    path: /etc/postgresql/16/main/pg_hba.conf
+    marker: "# {mark} ANSIBLE MANAGED — TBC HBA"
+    insertafter: "# TYPE  DATABASE        USER            ADDRESS                 METHOD"
+    block: |
+      # TBC application user — local socket and loopback only
+      local   tbc             tbc                                     md5
+      host    tbc             tbc             127.0.0.1/32            md5
+  notify: Restart PostgreSQL
+
+- name: Flush handlers to restart PostgreSQL before creating DB objects
+  meta: flush_handlers
+
+# ── Create user and database ────────────────────────────────────────────────────
+
+- name: Create PostgreSQL user tbc
+  become_user: postgres
+  postgresql_user:
+    name: tbc
+    role_attr_flags: NOSUPERUSER,NOCREATEDB,NOCREATEROLE
+    state: present
+
+- name: Create PostgreSQL database tbc
+  become_user: postgres
+  postgresql_db:
+    name: tbc
+    owner: tbc
+    encoding: UTF8
+    state: present
+
+# ── Enable extensions ────────────────────────────────────────────────────────────
+
+- name: Enable pgvector extension
+  become_user: postgres
+  postgresql_ext:
+    db: tbc
+    name: vector
+    state: present
+
+- name: Enable pg_trgm extension
+  become_user: postgres
+  postgresql_ext:
+    db: tbc
+    name: pg_trgm
+    state: present
+
+handlers:
+  - name: Restart PostgreSQL
+    systemd:
+      name: postgresql
+      state: restarted

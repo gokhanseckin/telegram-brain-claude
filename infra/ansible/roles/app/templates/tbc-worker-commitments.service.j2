@@ -1,0 +1,20 @@
+[Unit]
+Description=TBC Worker — commitment tracking and open-promise management
+After=network.target postgresql.service ollama.service
+Wants=postgresql.service ollama.service
+
+[Service]
+Type=simple
+User=tbc
+Group=tbc
+WorkingDirectory=/opt/tbc
+EnvironmentFile=/etc/tbc/env
+ExecStart=uv run python -m services.worker_commitments.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tbc-worker-commitments
+
+[Install]
+WantedBy=multi-user.target

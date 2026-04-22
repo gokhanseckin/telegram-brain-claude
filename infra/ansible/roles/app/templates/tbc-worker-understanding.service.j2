@@ -1,0 +1,20 @@
+[Unit]
+Description=TBC Worker — understanding pass (Qwen 2.5 7B via Ollama)
+After=network.target postgresql.service ollama.service
+Wants=postgresql.service ollama.service
+
+[Service]
+Type=simple
+User=tbc
+Group=tbc
+WorkingDirectory=/opt/tbc
+EnvironmentFile=/etc/tbc/env
+ExecStart=uv run python -m services.worker_understanding.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tbc-worker-understanding
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,75 @@
+---
+# ── Install rclone ───────────────────────────────────────────────────────────────
+
+- name: Check if rclone is installed
+  stat:
+    path: /usr/bin/rclone
+  register: rclone_binary
+
+- name: Install rclone via official script
+  shell: curl -fsSL https://rclone.org/install.sh | bash
+  when: not rclone_binary.stat.exists
+  args:
+    creates: /usr/bin/rclone
+
+# ── Configure rclone for Hetzner Storage Box (SFTP) ────────────────────────────
+
+- name: Ensure /etc/rclone directory exists
+  file:
+    path: /etc/rclone
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write rclone.conf with Hetzner Storage Box SFTP backend
+  copy:
+    dest: /etc/rclone/rclone.conf
+    content: |
+      [hetzner-box]
+      type = sftp
+      host = {{ backup_sftp_host }}
+      user = {{ backup_sftp_user }}
+      pass = {{ backup_sftp_pass }}
+      shell_type = unix
+      md5sum_command = md5sum
+      sha1sum_command = sha1sum
+    owner: root
+    group: root
+    mode: "0600"
+
+# ── Nightly backup cron job ──────────────────────────────────────────────────────
+
+- name: Write nightly pg_dump + rclone backup cron job
+  copy:
+    dest: /etc/cron.d/tbc-backup
+    content: |
+      # TBC nightly database backup — runs at 02:00 server time
+      SHELL=/bin/bash
+      PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+      0 2 * * * root \
+        pg_dump -U tbc tbc | gzip > /tmp/tbc-$(date +\%Y\%m\%d).sql.gz && \
+        rclone --config /etc/rclone/rclone.conf copy /tmp/tbc-$(date +\%Y\%m\%d).sql.gz hetzner-box:backups/ && \
+        find /tmp -name 'tbc-*.sql.gz' -mtime +1 -delete
+    owner: root
+    group: root
+    mode: "0644"
+
+# ── 14-day retention cleanup on the storage box ─────────────────────────────────
+
+- name: Write weekly retention cleanup cron job (remove backups older than 14 days)
+  copy:
+    dest: /etc/cron.d/tbc-backup-retention
+    content: |
+      # TBC backup retention — delete remote backups older than 14 days, runs Sunday 03:00
+      SHELL=/bin/bash
+      PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+      0 3 * * 0 root \
+        rclone --config /etc/rclone/rclone.conf delete \
+          --min-age 14d \
+          hetzner-box:backups/
+    owner: root
+    group: root
+    mode: "0644"
