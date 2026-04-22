@@ -33,7 +33,9 @@ async def run_gap_recovery(client: TelegramClient) -> None:
     Session = get_sessionmaker()
     with Session() as session:
         stmt = select(Chat).where(
-            (Chat.tag != "ignore") | (Chat.tag.is_(None))
+            ((Chat.tag != "ignore") | (Chat.tag.is_(None)))
+            & (Chat.type != "channel")
+            & ~((Chat.type == "supergroup") & (Chat.username.is_not(None)))
         )
         chats = list(session.scalars(stmt))
 

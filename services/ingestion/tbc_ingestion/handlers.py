@@ -58,6 +58,18 @@ def _chat_type(entity: Any) -> str:
     return "group"
 
 
+def _is_excluded_chat(entity: Any) -> bool:
+    """Return True for broadcast channels and public supergroups."""
+    from telethon.tl.types import Channel
+
+    if isinstance(entity, Channel):
+        if not entity.megagroup:
+            return True  # broadcast / announcement channel
+        if getattr(entity, "username", None):
+            return True  # public supergroup
+    return False
+
+
 def _upsert_user(session: Session, sender: Any) -> None:
     """Insert or update a users row from a Telethon User entity."""
     if sender is None:
@@ -148,6 +160,9 @@ async def _handle_new_message(event: events.NewMessage.Event) -> None:
     sender = await event.get_sender()
     chat_entity = await event.get_chat()
 
+    if _is_excluded_chat(chat_entity):
+        return
+
     Session = get_sessionmaker()
     with Session() as session:
         _upsert_user(session, sender)
@@ -179,13 +194,16 @@ async def _handle_message_edited(event: events.MessageEdited.Event) -> None:
     msg = event.message
     chat_id: int = event.chat_id
 
+    chat_entity = await event.get_chat()
+    if _is_excluded_chat(chat_entity):
+        return
+
     Session = get_sessionmaker()
     with Session() as session:
         existing = session.get(Message, (chat_id, msg.id))
         if existing is None:
             # We haven't stored this message yet — treat like a new message.
             sender = await event.get_sender()
-            chat_entity = await event.get_chat()
             _upsert_user(session, sender)
             _upsert_chat(session, chat_id, chat_entity)
             sender_id = sender.id if sender is not None else None
