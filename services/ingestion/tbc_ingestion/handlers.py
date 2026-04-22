@@ -29,12 +29,14 @@ log = structlog.get_logger(__name__)
 
 
 def _make_json_safe(obj: Any) -> Any:
-    """Recursively convert datetime objects to ISO strings for JSONB storage."""
+    """Recursively convert non-JSON types (datetime, bytes) for JSONB storage."""
     if isinstance(obj, datetime):
         return obj.isoformat()
+    if isinstance(obj, (bytes, bytearray, memoryview)):
+        return bytes(obj).hex()
     if isinstance(obj, dict):
         return {k: _make_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, list):
+    if isinstance(obj, (list, tuple)):
         return [_make_json_safe(i) for i in obj]
     return obj
 
