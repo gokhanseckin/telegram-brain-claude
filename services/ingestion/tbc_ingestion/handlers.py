@@ -28,6 +28,17 @@ log = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _make_json_safe(obj: Any) -> Any:
+    """Recursively convert datetime objects to ISO strings for JSONB storage."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_make_json_safe(i) for i in obj]
+    return obj
+
+
 def _chat_type(entity: Any) -> str:
     """Map a Telethon entity to our chat type string."""
     from telethon.tl.types import (
@@ -153,7 +164,7 @@ async def _handle_new_message(event: events.NewMessage.Event) -> None:
                     sent_at=msg.date,
                     text=msg.message,
                     reply_to_id=msg.reply_to_msg_id if hasattr(msg, "reply_to_msg_id") else None,
-                    raw=msg.to_dict(),
+                    raw=_make_json_safe(msg.to_dict()),
                 )
             )
         session.commit()
@@ -185,7 +196,7 @@ async def _handle_message_edited(event: events.MessageEdited.Event) -> None:
                     text=msg.message,
                     reply_to_id=getattr(msg, "reply_to_msg_id", None),
                     edited_at=msg.edit_date,
-                    raw=msg.to_dict(),
+                    raw=_make_json_safe(msg.to_dict()),
                 )
             )
         else:
