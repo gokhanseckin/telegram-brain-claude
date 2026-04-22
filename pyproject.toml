@@ -1,0 +1,52 @@
+[project]
+name = "telegram-brain-claude"
+version = "0.1.0"
+description = "Telegram Business Brain — second brain for Telegram-driven business."
+requires-python = ">=3.12"
+readme = "README.md"
+
+[tool.uv.workspace]
+members = [
+    "packages/common",
+    "services/ingestion",
+    "services/worker-understanding",
+    "services/worker-radar",
+    "services/worker-commitments",
+    "services/worker-brief",
+    "services/worker-weekly",
+    "services/tg-bot",
+    "services/mcp-server",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-postgresql>=6.0.0",
+    "respx>=0.21.0",
+    "httpx>=0.27.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages", "services"]
+markers = [
+    "real_ollama: opt-in tests that hit a real Ollama instance",
+    "integration: tests requiring Postgres",
+]

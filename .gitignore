@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# uv
+uv.lock
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.age
+*.session
+*.session-journal
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate*
+infra/terraform/.terraform.lock.hcl
+
+# Ansible
+infra/ansible/*.retry
+infra/ansible/vault_pass
+
+# Claude Code local state
+.claude/settings.local.json

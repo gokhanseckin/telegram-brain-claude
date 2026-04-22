@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: tbc
+          POSTGRES_PASSWORD: tbc
+          POSTGRES_DB: tbc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tbc"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TBC_DATABASE_URL: postgresql+psycopg://tbc:tbc@localhost:5432/tbc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.x"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-packages --dev
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Mypy
+        run: uv run mypy .
+
+      - name: Alembic upgrade head
+        run: uv run alembic -c packages/common/alembic.ini upgrade head
+
+      - name: Pytest
+        run: uv run pytest -m "not real_ollama" -q
