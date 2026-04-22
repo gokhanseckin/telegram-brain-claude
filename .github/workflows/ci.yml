@@ -35,6 +35,27 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      # Prune workspace members that don't exist on this branch so uv
+      # doesn't error on missing service directories (each PR branch
+      # carries only its own service).
+      - name: Prune missing workspace members
+        run: |
+          python3 - <<'EOF'
+          import tomllib, tomli_w, pathlib, sys
+          p = pathlib.Path("pyproject.toml")
+          data = tomllib.loads(p.read_text())
+          members = data.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
+          present = [m for m in members if pathlib.Path(m).exists()]
+          data["tool"]["uv"]["workspace"]["members"] = present
+          p.write_text(tomli_w.dumps(data))
+          print("workspace members kept:", present, file=sys.stderr)
+          EOF
+        env:
+          PIP_QUIET: "1"
+
+      - name: Install tomli-w (needed for above step)
+        run: pip install tomli-w -q
+
       - name: Sync workspace
         run: uv sync --all-packages --dev
 
