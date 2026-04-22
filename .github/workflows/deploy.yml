@@ -1,0 +1,54 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to TBC VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            echo "==> Pulling latest code..."
+            cd /opt/tbc
+            git pull origin main
+
+            echo "==> Syncing Python dependencies..."
+            uv sync --all-packages
+
+            echo "==> Running database migrations..."
+            uv run alembic -c packages/common/alembic.ini upgrade head
+
+            echo "==> Restarting TBC services..."
+            systemctl restart \
+              tbc-ingestion \
+              tbc-worker-understanding \
+              tbc-worker-radar \
+              tbc-worker-commitments \
+              tbc-worker-brief \
+              tbc-worker-weekly \
+              tbc-bot \
+              tbc-mcp-server
+
+            echo "==> Verifying services are running..."
+            systemctl is-active --quiet tbc-ingestion && echo "tbc-ingestion: OK"
+            systemctl is-active --quiet tbc-worker-understanding && echo "tbc-worker-understanding: OK"
+            systemctl is-active --quiet tbc-worker-radar && echo "tbc-worker-radar: OK"
+            systemctl is-active --quiet tbc-worker-commitments && echo "tbc-worker-commitments: OK"
+            systemctl is-active --quiet tbc-worker-brief && echo "tbc-worker-brief: OK"
+            systemctl is-active --quiet tbc-worker-weekly && echo "tbc-worker-weekly: OK"
+            systemctl is-active --quiet tbc-bot && echo "tbc-bot: OK"
+            systemctl is-active --quiet tbc-mcp-server && echo "tbc-mcp-server: OK"
+
+            echo "==> Deploy complete."

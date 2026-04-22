@@ -1,0 +1,76 @@
+---
+# ── Install Ollama ───────────────────────────────────────────────────────────────
+
+- name: Check if Ollama is already installed
+  stat:
+    path: /usr/local/bin/ollama
+  register: ollama_binary
+
+- name: Install Ollama via official install script
+  shell: curl -fsSL https://ollama.com/install.sh | sh
+  args:
+    creates: /usr/local/bin/ollama
+  when: not ollama_binary.stat.exists
+
+# ── Override systemd unit to bind to loopback only ──────────────────────────────
+
+- name: Create ollama systemd override directory
+  file:
+    path: /etc/systemd/system/ollama.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write Ollama systemd override to bind to loopback
+  copy:
+    dest: /etc/systemd/system/ollama.service.d/override.conf
+    content: |
+      [Service]
+      Environment="OLLAMA_HOST=127.0.0.1:11434"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Ollama
+
+- name: Enable and start Ollama
+  systemd:
+    name: ollama
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# ── Pull required models (idempotent) ───────────────────────────────────────────
+
+- name: Check currently pulled Ollama models
+  command: ollama list
+  register: ollama_models
+  changed_when: false
+  environment:
+    OLLAMA_HOST: "http://127.0.0.1:11434"
+
+- name: Pull Qwen 2.5 7B Instruct Q4_K_M
+  command: ollama pull qwen2.5:7b-instruct-q4_K_M
+  when: "'qwen2.5:7b-instruct-q4_K_M' not in ollama_models.stdout"
+  environment:
+    OLLAMA_HOST: "http://127.0.0.1:11434"
+  timeout: 1800   # 30 min — model is ~4 GB
+
+- name: Pull bge-m3 embeddings model
+  command: ollama pull bge-m3
+  when: "'bge-m3' not in ollama_models.stdout"
+  environment:
+    OLLAMA_HOST: "http://127.0.0.1:11434"
+  timeout: 1800   # 30 min
+
+handlers:
+  - name: Reload systemd
+    systemd:
+      daemon_reload: true
+
+  - name: Restart Ollama
+    systemd:
+      name: ollama
+      state: restarted

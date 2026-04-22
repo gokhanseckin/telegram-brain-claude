@@ -1,0 +1,20 @@
+[Unit]
+Description=TBC Telegram Bot — aiogram bot for commands and onboarding
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=tbc
+Group=tbc
+WorkingDirectory=/opt/tbc
+EnvironmentFile=/etc/tbc/env
+ExecStart=uv run python -m services.bot.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tbc-bot
+
+[Install]
+WantedBy=multi-user.target

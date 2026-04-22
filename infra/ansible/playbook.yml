@@ -1,0 +1,12 @@
+---
+- name: TBC VPS provisioning
+  hosts: tbc
+  become: true
+
+  roles:
+    - common
+    - postgres
+    - ollama
+    - caddy
+    - app
+    - backups

@@ -1,0 +1,176 @@
+---
+# ── Python 3.12 via deadsnakes PPA ──────────────────────────────────────────────
+
+- name: Add deadsnakes PPA for Python 3.12
+  apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+
+- name: Update apt cache after adding deadsnakes PPA
+  apt:
+    update_cache: true
+
+- name: Install Python 3.12 and dependencies
+  apt:
+    name:
+      - python3.12
+      - python3.12-venv
+      - python3.12-dev
+      - python3-pip
+    state: present
+
+# ── Install uv ──────────────────────────────────────────────────────────────────
+
+- name: Check if uv is installed
+  stat:
+    path: /usr/local/bin/uv
+  register: uv_binary
+
+- name: Install uv
+  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+  environment:
+    UV_INSTALL_DIR: /usr/local/bin
+  when: not uv_binary.stat.exists
+
+# ── Clone / update repo ─────────────────────────────────────────────────────────
+
+- name: Ensure /opt/tbc parent directory exists
+  file:
+    path: /opt
+    state: directory
+    mode: "0755"
+
+- name: Clone or update the TBC repository
+  git:
+    repo: "git@github.com:gokhanseckin/telegram-brain-claude.git"
+    dest: /opt/tbc
+    version: main
+    accept_hostkey: true
+    key_file: "{{ ansible_ssh_private_key_file }}"
+    force: false
+  become_user: tbc
+
+- name: Set ownership of /opt/tbc to tbc user
+  file:
+    path: /opt/tbc
+    owner: tbc
+    group: tbc
+    recurse: true
+
+# ── Install Python dependencies ─────────────────────────────────────────────────
+
+- name: Run uv sync to install all packages
+  command: uv sync --all-packages
+  args:
+    chdir: /opt/tbc
+  become_user: tbc
+  environment:
+    PATH: "/usr/local/bin:{{ ansible_env.PATH }}"
+
+# ── Run Alembic migrations ──────────────────────────────────────────────────────
+
+- name: Run Alembic migrations
+  command: uv run alembic -c packages/common/alembic.ini upgrade head
+  args:
+    chdir: /opt/tbc
+  become_user: tbc
+  environment:
+    PATH: "/usr/local/bin:{{ ansible_env.PATH }}"
+
+# ── Systemd service units ───────────────────────────────────────────────────────
+
+- name: Write tbc-ingestion.service
+  template:
+    src: tbc-ingestion.service.j2
+    dest: /etc/systemd/system/tbc-ingestion.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Write tbc-worker-understanding.service
+  template:
+    src: tbc-worker-understanding.service.j2
+    dest: /etc/systemd/system/tbc-worker-understanding.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Write tbc-worker-radar.service
+  template:
+    src: tbc-worker-radar.service.j2
+    dest: /etc/systemd/system/tbc-worker-radar.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Write tbc-worker-commitments.service
+  template:
+    src: tbc-worker-commitments.service.j2
+    dest: /etc/systemd/system/tbc-worker-commitments.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Write tbc-worker-brief.service
+  template:
+    src: tbc-worker-brief.service.j2
+    dest: /etc/systemd/system/tbc-worker-brief.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Write tbc-worker-weekly.service
+  template:
+    src: tbc-worker-weekly.service.j2
+    dest: /etc/systemd/system/tbc-worker-weekly.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Write tbc-bot.service
+  template:
+    src: tbc-bot.service.j2
+    dest: /etc/systemd/system/tbc-bot.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Write tbc-mcp-server.service
+  template:
+    src: tbc-mcp-server.service.j2
+    dest: /etc/systemd/system/tbc-mcp-server.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers to reload systemd before enabling units
+  meta: flush_handlers
+
+- name: Enable and start all TBC services
+  systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - tbc-ingestion.service
+    - tbc-worker-understanding.service
+    - tbc-worker-radar.service
+    - tbc-worker-commitments.service
+    - tbc-worker-brief.service
+    - tbc-worker-weekly.service
+    - tbc-bot.service
+    - tbc-mcp-server.service
+
+handlers:
+  - name: Reload systemd
+    systemd:
+      daemon_reload: true
