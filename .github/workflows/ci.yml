@@ -35,6 +35,9 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      - name: Install tomli-w (needed for workspace pruning)
+        run: pip install tomli-w -q
+
       # Prune workspace members that don't exist on this branch so uv
       # doesn't error on missing service directories (each PR branch
       # carries only its own service).
@@ -52,9 +55,6 @@ jobs:
           EOF
         env:
           PIP_QUIET: "1"
-
-      - name: Install tomli-w (needed for above step)
-        run: pip install tomli-w -q
 
       - name: Sync workspace
         run: uv sync --all-packages --dev
