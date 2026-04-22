@@ -18,6 +18,9 @@ members = [
     "services/mcp-server",
 ]
 
+[tool.uv.sources]
+tbc-common = { workspace = true }
+
 [tool.uv]
 dev-dependencies = [
     "ruff>=0.6.0",
