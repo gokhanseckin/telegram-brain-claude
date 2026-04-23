@@ -137,10 +137,7 @@ async def semantic_search(
         data = resp.json()
         # Ollama /api/embed returns {"embeddings": [[...]]}
         embeddings = data.get("embeddings") or data.get("embedding")
-        if isinstance(embeddings[0], list):
-            embedding = embeddings[0]
-        else:
-            embedding = embeddings
+        embedding = embeddings[0] if isinstance(embeddings[0], list) else embeddings
 
     # Build pgvector cosine similarity query
     stmt = (

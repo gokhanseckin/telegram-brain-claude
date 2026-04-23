@@ -61,7 +61,7 @@ async def _async_main() -> None:
     log.info("telegram_client_connected")
 
     # Start the pause-file monitor as a background task.
-    asyncio.create_task(start_pause_monitor())
+    _pause_task = asyncio.create_task(start_pause_monitor())  # noqa: RUF006
 
     # One-time 30-day backfill on first deploy (no-op after first success).
     await run_initial_backfill(client)

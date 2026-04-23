@@ -36,7 +36,7 @@ BRIEF_FORMAT_SPEC = """\
 Brief format spec:
 Output exactly five sections in order:
 1. 🎯 OPPORTUNITIES & RISKS — 3-7 items, each: signal sentence + action sentence + chat name
-2. ⏳ YOU OWE — missed replies and open user commitments, ranked by relationship value × age
+2. ⏳ YOU OWE — missed replies and open user commitments, ranked by relationship value x age
 3. 📬 THEY OWE YOU — open counterparty commitments worth chasing
 4. 📊 PORTFOLIO MOVEMENT — cross-chat patterns, warming/cooling relationships
 5. 🧭 TODAY'S FOCUS — one paragraph, top three actions

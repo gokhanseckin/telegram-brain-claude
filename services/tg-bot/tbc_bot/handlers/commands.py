@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC
 from pathlib import Path
 
@@ -118,10 +119,8 @@ async def cmd_pause(message: Message) -> None:
 async def cmd_resume(message: Message) -> None:
     if not is_owner(message):
         return
-    try:
+    with contextlib.suppress(FileNotFoundError):
         PAUSE_FILE.unlink()
-    except FileNotFoundError:
-        pass
     await message.answer("Ingestion resumed.")
 
 

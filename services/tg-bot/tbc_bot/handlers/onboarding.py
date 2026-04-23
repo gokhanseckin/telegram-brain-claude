@@ -88,11 +88,9 @@ async def _send_next_chat(trigger: Message | CallbackQuery, state: FSMContext) -
     chats: list[dict] = data.get("chats", [])
     idx: int = data.get("idx", 0)
 
-    target_msg: Message | None
-    if isinstance(trigger, Message):
-        target_msg = trigger
-    else:
-        target_msg = trigger.message  # type: ignore[assignment]
+    target_msg: Message | None = (
+        trigger if isinstance(trigger, Message) else trigger.message  # type: ignore[assignment]
+    )
 
     if idx >= len(chats):
         if target_msg:
