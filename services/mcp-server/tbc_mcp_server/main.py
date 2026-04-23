@@ -17,7 +17,7 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
 from sqlalchemy.orm import Session
 from starlette.applications import Starlette
-from starlette.routing import Mount, Route
+from starlette.routing import Mount
 from tbc_common.logging import configure_logging
 
 from .auth import BearerTokenMiddleware
@@ -382,8 +382,7 @@ async def lifespan(app: Starlette):  # type: ignore[no-untyped-def]
 app = Starlette(
     lifespan=lifespan,
     routes=[
-        Route("/mcp", handle_mcp, methods=["GET", "POST", "DELETE"]),
-        Mount("/mcp/", app=handle_mcp),
+        Mount("/mcp", app=handle_mcp),
         Mount("/", app=fastapi_app),
     ],
 )
