@@ -5,6 +5,7 @@ description = "Telegram bot UI for Telegram Business Brain."
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.13.0",
+    "anthropic>=0.40.0",
     "sqlalchemy>=2.0.30",
     "psycopg[binary]>=3.2.0",
     "structlog>=24.4.0",
