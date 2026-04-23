@@ -166,8 +166,8 @@ async def _handle_new_message(event: events.NewMessage.Event) -> None:
     if _is_excluded_chat(chat_entity):
         return
 
-    Session = get_sessionmaker()
-    with Session() as session:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
         _upsert_user(session, sender)
         _upsert_chat(session, chat_id, chat_entity)
 
@@ -201,8 +201,8 @@ async def _handle_message_edited(event: events.MessageEdited.Event) -> None:
     if _is_excluded_chat(chat_entity):
         return
 
-    Session = get_sessionmaker()
-    with Session() as session:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
         existing = session.get(Message, (chat_id, msg.id))
         if existing is None:
             # We haven't stored this message yet — treat like a new message.
@@ -258,8 +258,8 @@ async def _handle_message_deleted(event: events.MessageDeleted.Event) -> None:
         return
 
     now = datetime.now(tz=UTC)
-    Session = get_sessionmaker()
-    with Session() as session:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
         for msg_id in deleted_ids:
             if chat_id is not None:
                 existing = session.get(Message, (chat_id, msg_id))

@@ -24,10 +24,10 @@ TRIGGER_FILE = "/tmp/tbc_trigger_brief"
 def run_brief() -> None:
     """Assemble inputs, call Anthropic, deliver brief, persist results."""
     log.info("brief_run_starting")
-    Session = get_sessionmaker()
+    session_factory = get_sessionmaker()
     today = date.today()
 
-    with Session() as session:
+    with session_factory() as session:
         cached_context = build_cached_context(session)
         fresh_input, alert_ids = build_fresh_input(session)
 

@@ -35,11 +35,11 @@ DAY_MAP = {
 def run_weekly() -> None:
     """Assemble weekly input, call Batch API, deliver, persist results."""
     log.info("weekly_run_starting")
-    Session = get_sessionmaker()
+    session_factory = get_sessionmaker()
     today = date.today()
     monday = monday_of_week(today)
 
-    with Session() as session:
+    with session_factory() as session:
         weekly_input = build_weekly_input(session)
         weekly_text = call_batch_api(weekly_input, today)
         log.info("weekly_generated", length=len(weekly_text))

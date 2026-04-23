@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import httpx
 import structlog
@@ -88,9 +88,9 @@ def search_messages(
     if date_from:
         filters.append(Message.sent_at >= datetime(date_from.year, date_from.month, date_from.day))
     if date_to:
+        next_day = date_to + timedelta(days=1)
         filters.append(
-            Message.sent_at
-            < datetime(date_to.year, date_to.month, date_to.day + 1)
+            Message.sent_at < datetime(next_day.year, next_day.month, next_day.day)
         )
     if sender_ids:
         filters.append(Message.sender_id.in_(sender_ids))
