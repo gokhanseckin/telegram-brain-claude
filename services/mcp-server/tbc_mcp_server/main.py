@@ -395,7 +395,8 @@ async def lifespan(app: Starlette):  # type: ignore[no-untyped-def]
 app = Starlette(
     lifespan=lifespan,
     routes=[
-        Mount("/mcp", app=handle_mcp),
+        Route("/mcp", handle_mcp, methods=["GET", "POST", "DELETE"]),
+        Mount("/mcp/", app=handle_mcp),
         Mount("/", app=fastapi_app),
     ],
 )
