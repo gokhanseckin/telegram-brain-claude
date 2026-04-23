@@ -108,7 +108,7 @@ async def _send_next_chat(trigger: Message | CallbackQuery, state: FSMContext) -
         preview = _last_messages_preview(session, chat_id)
 
     text = (
-        f"*{idx + 1}/{len(chats)}* — {title}\n\n"
+        f"{idx + 1}/{len(chats)} — {title}\n\n"
         f"Last messages:\n{preview}\n\n"
         "How would you tag this chat?"
     )
@@ -116,7 +116,7 @@ async def _send_next_chat(trigger: Message | CallbackQuery, state: FSMContext) -
     await state.set_state(OnboardingState.tagging)
 
     if target_msg:
-        await target_msg.answer(text, reply_markup=_tag_keyboard(), parse_mode="Markdown")
+        await target_msg.answer(text, reply_markup=_tag_keyboard(), parse_mode=None)
 
 
 async def _start_onboarding(message: Message, state: FSMContext) -> None:

@@ -66,9 +66,18 @@ def main() -> None:
     configure_logging("worker-weekly")
     log.info("worker_weekly_starting")
 
-    hour = int(settings.weekly_time.split(":")[0])
-    minute = int(settings.weekly_time.split(":")[1])
-    day_of_week = DAY_MAP.get(settings.weekly_day.lower(), "mon")
+    if settings.anthropic_api_key is None:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    parts = settings.weekly_time.split(":")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        raise RuntimeError(f"TBC_WEEKLY_TIME must be HH:MM, got: {settings.weekly_time!r}")
+    hour, minute = int(parts[0]), int(parts[1])
+
+    day_key = settings.weekly_day.lower()
+    if day_key not in DAY_MAP:
+        raise RuntimeError(f"TBC_WEEKLY_DAY must be a weekday name, got: {settings.weekly_day!r}")
+    day_of_week = DAY_MAP[day_key]
 
     scheduler = BackgroundScheduler(timezone=settings.brief_tz)
     scheduler.add_job(

@@ -57,7 +57,13 @@ def main() -> None:
     configure_logging("worker-brief")
     log.info("worker_brief_starting")
 
-    hour, minute = int(settings.brief_time.split(":")[0]), int(settings.brief_time.split(":")[1])
+    if settings.anthropic_api_key is None:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    parts = settings.brief_time.split(":")
+    if len(parts) != 2 or not all(p.isdigit() for p in parts):
+        raise RuntimeError(f"TBC_BRIEF_TIME must be HH:MM, got: {settings.brief_time!r}")
+    hour, minute = int(parts[0]), int(parts[1])
 
     scheduler = BackgroundScheduler(timezone=settings.brief_tz)
     scheduler.add_job(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -33,8 +33,6 @@ async def cmd_ignore(message: Message) -> None:
 
     args = (message.text or "").split(maxsplit=1)
     chat_name = args[1].strip() if len(args) > 1 else None
-
-    from datetime import datetime
 
     now = datetime.now(UTC)
     sm = get_sessionmaker()
