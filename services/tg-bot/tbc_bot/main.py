@@ -11,7 +11,6 @@ import asyncio
 import structlog
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from tbc_common.config import settings
 from tbc_common.logging import configure_logging
@@ -30,7 +29,7 @@ async def main() -> None:
 
     bot = Bot(
         token=token.get_secret_value(),
-        default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
+        default=DefaultBotProperties(parse_mode=None),
     )
 
     storage = MemoryStorage()

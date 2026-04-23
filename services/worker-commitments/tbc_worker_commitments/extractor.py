@@ -33,15 +33,16 @@ def extract_commitments(session: Session) -> int:
         logger.debug("no_commitment_candidates")
         return 0
 
-    # Get existing source_message_ids to avoid duplicates
-    existing_stmt = select(Commitment.source_message_id).where(
+    # Get existing (chat_id, source_message_id) pairs to avoid duplicates.
+    # Using chat_id prevents cross-chat collisions (Telegram resets message IDs per chat).
+    existing_stmt = select(Commitment.chat_id, Commitment.source_message_id).where(
         Commitment.source_message_id != None,  # noqa: E711
     )
-    existing_message_ids: set[int] = set(session.scalars(existing_stmt).all())
+    existing_keys: set[tuple[int, int]] = {(row[0], row[1]) for row in session.execute(existing_stmt).all()}
 
     created = 0
     for mu in candidates:
-        if mu.message_id in existing_message_ids:
+        if (mu.chat_id, mu.message_id) in existing_keys:
             continue
 
         commitment_data: dict[str, Any] = mu.commitment or {}
@@ -65,7 +66,7 @@ def extract_commitments(session: Session) -> int:
             status="open",
         )
         session.add(commitment)
-        existing_message_ids.add(mu.message_id)
+        existing_keys.add((mu.chat_id, mu.message_id))
         created += 1
         logger.info(
             "commitment_created",
