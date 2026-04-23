@@ -20,6 +20,8 @@ from telethon import TelegramClient
 from telethon.errors import FloodWaitError
 from telethon.tl.types import Message as TgMessage
 
+from .handlers import _make_json_safe
+
 log = structlog.get_logger(__name__)
 
 _PAGE_LIMIT = 100
@@ -165,7 +167,7 @@ async def _store_messages(
                     text=msg.message,
                     reply_to_id=reply_to,
                     edited_at=getattr(msg, "edit_date", None),
-                    raw=msg.to_dict(),
+                    raw=_make_json_safe(msg.to_dict()),
                 )
             )
 
