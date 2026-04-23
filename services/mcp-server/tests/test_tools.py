@@ -119,7 +119,7 @@ def test_search_messages_returns_results():
     db = MagicMock()
     # Return 3 rows from tsvector query
     db.execute.return_value.all.return_value = [
-        (msg, chat, user, und) for msg, und in zip(messages, understandings)
+        (msg, chat, user, und) for msg, und in zip(messages, understandings, strict=False)
     ]
 
     results = search_messages(db, query="hello")
@@ -197,7 +197,7 @@ def test_get_chat_history_paginates():
 
     assert len(results) == 2
     # Verify limit was passed in the query
-    execute_call = db.execute.call_args[0][0]
+    db.execute.call_args[0][0]
     # The compiled statement should have LIMIT applied
 
 
@@ -209,7 +209,7 @@ def test_get_chat_history_paginates():
 def test_list_chats_filters_by_tag():
     """list_chats returns only chats matching the specified tag."""
     client_chat = _chat(chat_id=1, tag="client", title="Client Corp")
-    prospect_chat = _chat(chat_id=2, tag="prospect", title="Prospect Inc")
+    _chat(chat_id=2, tag="prospect", title="Prospect Inc")
 
     db = MagicMock()
     # Simulate DB returning only the client chat after tag filter
@@ -237,7 +237,7 @@ def test_get_commitments_overdue_only():
         due_at=datetime(2020, 1, 1, tzinfo=UTC),
         description="Overdue task",
     )
-    future_due = _commitment(
+    _commitment(
         id=2,
         status="open",
         due_at=datetime(2099, 1, 1, tzinfo=UTC),

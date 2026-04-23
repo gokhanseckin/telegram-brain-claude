@@ -16,7 +16,7 @@ sections, in this order:
 
 2. ⏳ YOU OWE
    Replies the user missed and commitments the user made that are open.
-   Rank by relationship value × age. Include chat name and what's owed.
+   Rank by relationship value x age. Include chat name and what's owed.
 
 3. 📬 THEY OWE YOU
    Things others committed to the user that haven't landed. Flag chase-worthy ones.

@@ -235,7 +235,7 @@ async def test_message_deleted_sets_deleted_at():
     existing_11.deleted_at = None
 
     def fake_get(model_class, pk):
-        chat_id, msg_id = pk
+        _chat_id, msg_id = pk
         if msg_id == 10:
             return existing_10
         if msg_id == 11:

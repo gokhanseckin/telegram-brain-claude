@@ -9,20 +9,18 @@ each remaining dialog. Runs at most once per install — guarded by the
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import structlog
-from sqlalchemy import select
-from telethon import TelegramClient
-from telethon.errors import FloodWaitError
-
 from tbc_common.config import settings
 from tbc_common.db.models import ServiceState
 from tbc_common.db.session import get_sessionmaker
+from telethon import TelegramClient
+from telethon.errors import FloodWaitError
 
 from .gap_recovery import _PAGE_SLEEP_SECONDS, _store_messages
-from .handlers import _is_excluded_chat, _upsert_chat, _upsert_user
+from .handlers import _is_excluded_chat, _upsert_chat
 
 log = structlog.get_logger(__name__)
 
@@ -50,7 +48,7 @@ def _mark_started() -> None:
         if state is None:
             state = ServiceState(id=1)
             session.add(state)
-        state.initial_backfill_started_at = datetime.now(timezone.utc)
+        state.initial_backfill_started_at = datetime.now(UTC)
         session.commit()
 
 
@@ -61,7 +59,7 @@ def _mark_done() -> None:
         if state is None:
             state = ServiceState(id=1)
             session.add(state)
-        state.initial_backfill_done_at = datetime.now(timezone.utc)
+        state.initial_backfill_done_at = datetime.now(UTC)
         session.commit()
 
 
@@ -73,7 +71,7 @@ async def run_initial_backfill(client: TelegramClient) -> None:
         return
 
     _mark_started()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=BACKFILL_WINDOW_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=BACKFILL_WINDOW_DAYS)
     log.info("initial_backfill_starting", cutoff=cutoff.isoformat())
 
     dialog_count = 0
