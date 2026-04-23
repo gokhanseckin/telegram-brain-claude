@@ -53,7 +53,8 @@ def extract_commitments(session: Session) -> int:
         due_str = commitment_data.get("due")
         if due_str:
             try:
-                due_at = datetime.fromisoformat(due_str).replace(tzinfo=UTC)
+                parsed = datetime.fromisoformat(due_str)
+                due_at = parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
             except (ValueError, AttributeError):
                 logger.warning("invalid_due_date", due_str=due_str, message_id=mu.message_id)
 

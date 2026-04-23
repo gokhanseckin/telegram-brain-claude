@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 import structlog
-from sqlalchemy import and_, desc, select
+from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.orm import Session
 from tbc_common.db.models import Chat, Message, MessageUnderstanding
 
@@ -35,7 +35,10 @@ def get_signals(
         .where(
             and_(
                 MessageUnderstanding.is_signal == True,  # noqa: E712
-                MessageUnderstanding.signal_strength >= min_strength,
+                or_(
+                    MessageUnderstanding.signal_strength.is_(None),
+                    MessageUnderstanding.signal_strength >= min_strength,
+                ),
                 Chat.tag.isnot(None),
                 Chat.tag != "ignore",
                 Message.deleted_at.is_(None),
