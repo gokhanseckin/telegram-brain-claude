@@ -12,7 +12,7 @@ from typing import Any
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tbc_common.db import Chat, MessageUnderstanding, RelationshipState
+from tbc_common.db import Chat, Message, MessageUnderstanding, RelationshipState
 
 logger = structlog.get_logger(__name__)
 
@@ -71,13 +71,28 @@ def _recompute_one(session: Session, chat_id: int) -> None:
         ).all()
     )
 
+    # Use sent_at (not processed_at) so backfill runs don't make all history
+    # look like it happened today.
+    sent_at_map: dict[int, datetime] = {}
+    if all_mu:
+        for msg_id, sent_at in session.execute(
+            select(Message.message_id, Message.sent_at).where(
+                Message.chat_id == chat_id,
+                Message.message_id.in_([r.message_id for r in all_mu]),
+            )
+        ).all():
+            sent_at_map[msg_id] = sent_at
+
+    def _contact_time(r: MessageUnderstanding) -> datetime:
+        return _utc(sent_at_map.get(r.message_id, r.processed_at))
+
     # Filter by date in Python to avoid timezone issues with SQLite
-    rows_30d = [r for r in all_mu if _utc(r.processed_at) >= now - timedelta(days=30)]
-    rows_7d = [r for r in rows_30d if _utc(r.processed_at) >= now - timedelta(days=7)]
-    rows_14d = [r for r in rows_30d if _utc(r.processed_at) >= now - timedelta(days=14)]
+    rows_30d = [r for r in all_mu if _contact_time(r) >= now - timedelta(days=30)]
+    rows_7d = [r for r in rows_30d if _contact_time(r) >= now - timedelta(days=7)]
+    rows_14d = [r for r in rows_30d if _contact_time(r) >= now - timedelta(days=14)]
 
     # Also check rows older than 30 days for dormant logic
-    all_contact_times = [_utc(r.processed_at) for r in all_mu]
+    all_contact_times = [_contact_time(r) for r in all_mu]
     last_contact: datetime | None = max(all_contact_times, default=None)
 
     # --- Stage inference ---
@@ -116,11 +131,11 @@ def _recompute_one(session: Session, chat_id: int) -> None:
     directed_rows = [r for r in rows_14d if r.is_directed_at_user and r.summary_en]
     seen: set[str] = set()
     open_threads: list[dict[str, Any]] = []
-    for r in sorted(directed_rows, key=lambda x: _utc(x.processed_at), reverse=True):
+    for r in sorted(directed_rows, key=_contact_time, reverse=True):
         if r.summary_en not in seen:
             seen.add(r.summary_en)
             open_threads.append(
-                {"topic": r.summary_en, "last_mentioned_at": _utc(r.processed_at).isoformat()}
+                {"topic": r.summary_en, "last_mentioned_at": _contact_time(r).isoformat()}
             )
         if len(open_threads) >= MAX_OPEN_THREADS:
             break

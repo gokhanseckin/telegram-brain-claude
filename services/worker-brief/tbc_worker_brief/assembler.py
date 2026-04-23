@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 
 import structlog
@@ -162,7 +163,6 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
             alert_ids.append(alert.id)
             tag_match = ""
             if alert.reasoning:
-                import re
                 m = re.search(r"#\w+", alert.reasoning)
                 if m:
                     tag_match = f" {m.group(0)}"
