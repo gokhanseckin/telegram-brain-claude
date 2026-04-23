@@ -117,42 +117,57 @@ async def _recover_chat(client: TelegramClient, chat_id: int) -> None:
 async def _store_messages(
     client: TelegramClient, chat_id: int, messages: list[Any]
 ) -> None:
-    """Persist a batch of Telethon message objects, skipping already-stored ones."""
-    Session = get_sessionmaker()
-    with Session() as session:
-        for msg in messages:
-            if not isinstance(msg, TgMessage):
-                continue
+    """Persist a batch of Telethon messages.
 
-            # Skip if already stored.
+    Two-phase: first resolve and commit any new sender Users so their rows exist
+    before Messages reference them via FK; then insert Messages in a second
+    session, falling back to sender_id=NULL for senders that couldn't be
+    resolved. This avoids mid-loop FK races under autoflush.
+    """
+    tg_messages = [m for m in messages if isinstance(m, TgMessage)]
+    if not tg_messages:
+        return
+
+    sender_ids: set[int] = {m.sender_id for m in tg_messages if m.sender_id is not None}
+
+    Session = get_sessionmaker()
+
+    # Phase 1: resolve + insert any missing Users. Commit before touching Messages.
+    resolved: set[int] = set()
+    if sender_ids:
+        with Session() as session:
+            existing = set(
+                session.scalars(
+                    select(User.user_id).where(User.user_id.in_(sender_ids))
+                )
+            )
+            resolved |= existing
+            for sid in sender_ids - existing:
+                try:
+                    sender = await client.get_entity(sid)
+                    session.add(
+                        User(
+                            user_id=sid,
+                            first_name=getattr(sender, "first_name", None),
+                            last_name=getattr(sender, "last_name", None),
+                            username=getattr(sender, "username", None),
+                            is_self=getattr(sender, "is_self", False),
+                        )
+                    )
+                    resolved.add(sid)
+                except Exception:
+                    log.debug("could_not_resolve_sender", sender_id=sid, chat_id=chat_id)
+            session.commit()
+
+    # Phase 2: insert Messages, nulling sender_id for any still-unresolved sender.
+    with Session() as session:
+        for msg in tg_messages:
             if session.get(Message, (chat_id, msg.id)) is not None:
                 continue
 
             sender_id: int | None = None
-            if msg.sender_id is not None:
+            if msg.sender_id is not None and msg.sender_id in resolved:
                 sender_id = msg.sender_id
-                # Upsert sender user row if we don't have it.
-                if session.get(User, sender_id) is None:
-                    try:
-                        sender = await client.get_entity(sender_id)
-                        session.add(
-                            User(
-                                user_id=sender_id,
-                                first_name=getattr(sender, "first_name", None),
-                                last_name=getattr(sender, "last_name", None),
-                                username=getattr(sender, "username", None),
-                                is_self=getattr(sender, "is_self", False),
-                            )
-                        )
-                    except Exception:
-                        # If we can't resolve the sender, store the message
-                        # without sender_id to avoid FK violations.
-                        log.debug(
-                            "could_not_resolve_sender",
-                            sender_id=sender_id,
-                            chat_id=chat_id,
-                        )
-                        sender_id = None
 
             reply_to: int | None = None
             if hasattr(msg, "reply_to") and msg.reply_to is not None:
