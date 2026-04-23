@@ -367,8 +367,19 @@ session_manager = StreamableHTTPSessionManager(
 )
 
 
-async def handle_mcp(scope, receive, send) -> None:  # type: ignore[no-untyped-def]
-    await session_manager.handle_request(scope, receive, send)
+class _Router:
+    """Dispatch /mcp and /mcp/* to the MCP session manager; everything else to FastAPI.
+
+    Uses Mount("") so the full original path reaches the session manager without
+    stripping — Starlette's Mount("/mcp") only matches /mcp/ (trailing slash required).
+    """
+
+    async def __call__(self, scope, receive, send) -> None:  # type: ignore[no-untyped-def]
+        path: str = scope.get("path", "")
+        if scope["type"] == "http" and (path == "/mcp" or path.startswith("/mcp/")):
+            await session_manager.handle_request(scope, receive, send)
+        else:
+            await fastapi_app(scope, receive, send)
 
 
 @contextlib.asynccontextmanager
@@ -381,14 +392,10 @@ async def lifespan(app: Starlette):  # type: ignore[no-untyped-def]
 
 app = Starlette(
     lifespan=lifespan,
-    routes=[
-        Mount("/mcp", app=handle_mcp),
-        Mount("/", app=fastapi_app),
-    ],
+    routes=[Mount("", app=_Router())],
 )
 
-# Attach the bearer token middleware at the top level so /mcp is also protected
-
+# Bearer token middleware protects both /mcp and FastAPI routes
 app.add_middleware(BearerTokenMiddleware)
 
 
