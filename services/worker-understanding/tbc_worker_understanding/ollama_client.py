@@ -35,3 +35,12 @@ class OllamaClient:
             response.raise_for_status()
             data = response.json()
             return data["embeddings"][0]  # type: ignore[no-any-return]
+
+    async def embed_batch(self, model: str, inputs: list[str]) -> list[list[float]]:
+        """Call /api/embed with a list of inputs and return a parallel list of vectors."""
+        payload = {"model": model, "input": inputs}
+        async with httpx.AsyncClient(base_url=self._base_url, timeout=300.0) as client:
+            response = await client.post("/api/embed", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            return data["embeddings"]  # type: ignore[no-any-return]
