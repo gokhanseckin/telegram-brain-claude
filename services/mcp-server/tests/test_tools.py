@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from tbc_mcp_server.models import MessageResult
 from tbc_mcp_server.tools.chat import get_chat_history, list_chats
 from tbc_mcp_server.tools.commitments import get_commitments
 from tbc_mcp_server.tools.search import _make_deep_link, search_messages
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build mock ORM objects
@@ -60,7 +58,7 @@ def _message(
     m.message_id = message_id
     m.chat_id = chat_id
     m.text = text
-    m.sent_at = sent_at or datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    m.sent_at = sent_at or datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     m.sender_id = sender_id
     m.deleted_at = deleted_at
     return m
@@ -98,8 +96,8 @@ def _commitment(
     m.owner = owner
     m.description = description
     m.status = status
-    m.due_at = due_at or datetime(2024, 1, 1, tzinfo=timezone.utc)
-    m.created_at = created_at or datetime(2024, 1, 1, tzinfo=timezone.utc)
+    m.due_at = due_at or datetime(2024, 1, 1, tzinfo=UTC)
+    m.created_at = created_at or datetime(2024, 1, 1, tzinfo=UTC)
     m.resolved_at = resolved_at
     m.resolved_by_message_id = resolved_by_message_id
     m.source_message_id = source_message_id
@@ -215,7 +213,7 @@ def test_list_chats_filters_by_tag():
 
     db = MagicMock()
     # Simulate DB returning only the client chat after tag filter
-    last_activity = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    last_activity = datetime(2024, 6, 1, tzinfo=UTC)
     db.execute.return_value.all.return_value = [(client_chat, last_activity)]
 
     results = list_chats(db, tag="client")
@@ -236,13 +234,13 @@ def test_get_commitments_overdue_only():
     past_due = _commitment(
         id=1,
         status="open",
-        due_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        due_at=datetime(2020, 1, 1, tzinfo=UTC),
         description="Overdue task",
     )
     future_due = _commitment(
         id=2,
         status="open",
-        due_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
+        due_at=datetime(2099, 1, 1, tzinfo=UTC),
         description="Future task",
     )
 
@@ -283,7 +281,7 @@ def test_message_result_has_deep_link():
         chat_title="Test",
         chat_tag="client",
         message_id=100,
-        sent_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        sent_at=datetime(2024, 1, 1, tzinfo=UTC),
         sender_name="Alice",
         text="hello",
         summary_en=None,

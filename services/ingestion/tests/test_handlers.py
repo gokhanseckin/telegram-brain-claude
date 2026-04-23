@@ -6,12 +6,10 @@ connection is required.
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build fake Telethon objects
@@ -29,7 +27,7 @@ def make_fake_message(
 ) -> MagicMock:
     """Return a MagicMock that quacks like a Telethon Message."""
     if date is None:
-        date = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        date = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     msg = MagicMock()
     msg.id = msg_id
     msg.chat_id = chat_id
@@ -114,7 +112,7 @@ async def test_new_message_inserts_user_chat_and_message():
     mock_session_instance.commit.assert_called_once()
 
     # Verify a Message row was added with the right data
-    from tbc_common.db.models import Message, User, Chat
+    from tbc_common.db.models import Message
 
     added_types = [type(c.args[0]).__name__ for c in add_calls]
     assert "User" in added_types
@@ -134,8 +132,8 @@ async def test_new_message_inserts_user_chat_and_message():
 @pytest.mark.asyncio
 async def test_new_message_skips_duplicate():
     """If a message already exists in the DB, no new Message row should be added."""
-    from tbc_ingestion.handlers import _handle_new_message
     from tbc_common.db.models import Message
+    from tbc_ingestion.handlers import _handle_new_message
 
     fake_msg = make_fake_message(msg_id=7, chat_id=200, sender_id=99)
     fake_sender = make_fake_sender(user_id=99)
@@ -179,10 +177,10 @@ async def test_new_message_skips_duplicate():
 @pytest.mark.asyncio
 async def test_message_edited_updates_text_and_appends_history():
     """Editing a message should update text/edited_at and append old text to edit_history."""
-    from tbc_ingestion.handlers import _handle_message_edited
     from tbc_common.db.models import Message
+    from tbc_ingestion.handlers import _handle_message_edited
 
-    edit_time = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+    edit_time = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
     fake_msg = make_fake_message(
         msg_id=5, chat_id=300, text="new text", edit_date=edit_time
     )
@@ -224,8 +222,8 @@ async def test_message_edited_updates_text_and_appends_history():
 @pytest.mark.asyncio
 async def test_message_deleted_sets_deleted_at():
     """A MessageDeleted event should set deleted_at on the matching row."""
-    from tbc_ingestion.handlers import _handle_message_deleted
     from tbc_common.db.models import Message
+    from tbc_ingestion.handlers import _handle_message_deleted
 
     event = MagicMock()
     event.chat_id = 400

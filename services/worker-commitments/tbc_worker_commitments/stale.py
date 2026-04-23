@@ -5,12 +5,11 @@ Marks commitments as 'stale' if status='open' and due_at < NOW() - 3 days.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from tbc_common.db import Commitment
 
 logger = structlog.get_logger(__name__)
@@ -23,7 +22,7 @@ def mark_stale_commitments(session: Session) -> int:
 
     Returns the number of commitments updated.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     threshold = now - timedelta(days=STALE_GRACE_DAYS)
 
     overdue = list(

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from tbc_common.db.models import (
     BriefFeedback,
     Chat,
@@ -28,7 +27,7 @@ def monday_of_week(d: date) -> date:
 def build_weekly_input(session: Session) -> str:
     """Assemble the weekly review input text."""
     today = date.today()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     week_ago = now - timedelta(days=7)
     monday = monday_of_week(today)
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Generator
 
 from sqlalchemy.orm import Session
-
 from tbc_common.db.session import get_sessionmaker
 
 

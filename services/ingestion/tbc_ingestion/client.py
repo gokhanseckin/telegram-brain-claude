@@ -22,9 +22,8 @@ Interactive first-run auth:
 from __future__ import annotations
 
 import structlog
-from telethon import TelegramClient
-
 from tbc_common.config import settings
+from telethon import TelegramClient
 
 log = structlog.get_logger(__name__)
 

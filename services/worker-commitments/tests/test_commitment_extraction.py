@@ -5,7 +5,7 @@ The `session` fixture is provided by ../conftest.py (SQLite in-memory).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -23,7 +23,7 @@ def _mu(session, chat_id=1, message_id=1, is_commitment=True, commitment=None,
         is_signal=is_signal,
         signal_type=signal_type,
         signal_strength=signal_strength,
-        processed_at=datetime.now(timezone.utc),
+        processed_at=datetime.now(UTC),
         summary_en="Test summary",
     )
     session.add(mu)

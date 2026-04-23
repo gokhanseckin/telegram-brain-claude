@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-
 from tbc_common.db.models import Message, MessageUnderstanding
 from tbc_common.prompts import MODEL_VERSION, UNDERSTANDING_SYSTEM
 

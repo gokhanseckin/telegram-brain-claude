@@ -9,4 +9,4 @@
     - ollama
     - caddy
     - app
-    - backups
+    # - backups  # skipped — Storage Box not configured yet

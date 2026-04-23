@@ -8,7 +8,6 @@ from datetime import date
 
 import structlog
 from apscheduler.schedulers.background import BackgroundScheduler
-
 from tbc_common.config import settings
 from tbc_common.db.session import get_sessionmaker
 from tbc_common.logging import configure_logging

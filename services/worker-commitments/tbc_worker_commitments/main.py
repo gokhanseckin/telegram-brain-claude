@@ -9,10 +9,8 @@ Runs three jobs in a single process on separate schedules:
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
 
 import structlog
-
 from tbc_common.db.session import get_sessionmaker
 from tbc_common.logging import configure_logging
 

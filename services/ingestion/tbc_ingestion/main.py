@@ -21,13 +21,12 @@ from __future__ import annotations
 import asyncio
 
 import structlog
+from tbc_common.logging import configure_logging
 from telethon.errors import (
     FloodWaitError,
     PhoneCodeInvalidError,
     SessionPasswordNeededError,
 )
-
-from tbc_common.logging import configure_logging
 
 from .client import build_client
 from .gap_recovery import run_gap_recovery

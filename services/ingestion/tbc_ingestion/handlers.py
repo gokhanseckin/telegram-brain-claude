@@ -7,16 +7,15 @@ described in docs/mvp-spec.md §3 and §9.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from sqlalchemy.orm import Session
-from telethon import TelegramClient, events
-from telethon.errors import FloodWaitError
-
 from tbc_common.db.models import Chat, Message, User
 from tbc_common.db.session import get_sessionmaker
+from telethon import TelegramClient, events
+from telethon.errors import FloodWaitError
 
 from .pause import is_paused
 
@@ -45,7 +44,11 @@ def _chat_type(entity: Any) -> str:
     """Map a Telethon entity to our chat type string."""
     from telethon.tl.types import (
         Channel,
+    )
+    from telethon.tl.types import (
         Chat as TgChat,
+    )
+    from telethon.tl.types import (
         User as TgUser,
     )
 
@@ -230,7 +233,7 @@ async def _handle_message_edited(event: events.MessageEdited.Event) -> None:
                     "edited_at": existing.edited_at.isoformat()
                     if existing.edited_at
                     else None,
-                    "replaced_at": datetime.now(tz=timezone.utc).isoformat(),
+                    "replaced_at": datetime.now(tz=UTC).isoformat(),
                 }
             )
             raw["edit_history"] = edit_history
@@ -254,7 +257,7 @@ async def _handle_message_deleted(event: events.MessageDeleted.Event) -> None:
     if not deleted_ids:
         return
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     Session = get_sessionmaker()
     with Session() as session:
         for msg_id in deleted_ids:

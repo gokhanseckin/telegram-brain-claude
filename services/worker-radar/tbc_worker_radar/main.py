@@ -7,10 +7,9 @@ calling the aggregator to process new signals into radar_alerts.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
-
 from tbc_common.db.session import get_sessionmaker
 from tbc_common.logging import configure_logging
 
@@ -28,7 +27,7 @@ def main() -> None:
 
     Session = get_sessionmaker()
     # Start from epoch so we catch everything on first run
-    last_checked_at: datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    last_checked_at: datetime = datetime(1970, 1, 1, tzinfo=UTC)
 
     while True:
         try:

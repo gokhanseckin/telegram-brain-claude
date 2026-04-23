@@ -7,13 +7,12 @@ commitments rows.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from tbc_common.db import Commitment, MessageUnderstanding
 
 logger = structlog.get_logger(__name__)
@@ -53,8 +52,7 @@ def extract_commitments(session: Session) -> int:
         due_str = commitment_data.get("due")
         if due_str:
             try:
-                from datetime import timezone
-                due_at = datetime.fromisoformat(due_str).replace(tzinfo=timezone.utc)
+                due_at = datetime.fromisoformat(due_str).replace(tzinfo=UTC)
             except (ValueError, AttributeError):
                 logger.warning("invalid_due_date", due_str=due_str, message_id=mu.message_id)
 

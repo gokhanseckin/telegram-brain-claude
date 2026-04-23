@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import httpx
 import structlog
 from anthropic import Anthropic
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-
 from tbc_common.config import settings
 from tbc_common.db.models import ChatSummary, RadarAlert
 from tbc_common.prompts import BRIEF_SYSTEM
@@ -92,7 +91,7 @@ def save_brief(session: Session, brief_text: str, today: date) -> None:
         )
         .on_conflict_do_update(
             index_elements=["chat_id", "period", "period_start"],
-            set_={"summary": brief_text, "generated_at": datetime.now(timezone.utc)},
+            set_={"summary": brief_text, "generated_at": datetime.now(UTC)},
         )
     )
     session.execute(stmt)
@@ -104,7 +103,7 @@ def stamp_radar_alerts(session: Session, alert_ids: list[int]) -> None:
     """Stamp surfaced_in_brief_at on all radar alerts included in this brief."""
     if not alert_ids:
         return
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session.execute(
         RadarAlert.__table__.update()
         .where(RadarAlert.id.in_(alert_ids))

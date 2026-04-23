@@ -5,7 +5,7 @@ The `session` fixture is provided by ../conftest.py (SQLite in-memory).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -28,7 +28,7 @@ def _mu(session, chat_id=1, message_id=1, processed_at=None, is_signal=False,
         chat_id=chat_id,
         message_id=message_id,
         model_version="test-v1",
-        processed_at=processed_at or datetime.now(timezone.utc),
+        processed_at=processed_at or datetime.now(UTC),
         is_signal=is_signal,
         signal_type=signal_type,
         signal_strength=signal_strength,
@@ -47,7 +47,7 @@ def test_dormant_stage_when_no_contact(session: Session):
     from tbc_worker_commitments.relationship import recompute_relationship_states
 
     _chat(session, chat_id=1)
-    old_time = datetime.now(timezone.utc) - timedelta(days=35)
+    old_time = datetime.now(UTC) - timedelta(days=35)
     _mu(session, chat_id=1, message_id=1, processed_at=old_time)
 
     recompute_relationship_states(session)
@@ -63,7 +63,7 @@ def test_active_stage_recent_messages(session: Session):
     from tbc_worker_commitments.relationship import recompute_relationship_states
 
     _chat(session, chat_id=2)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for i in range(5):
         _mu(session, chat_id=2, message_id=i + 1,
             processed_at=now - timedelta(hours=i + 1))
@@ -81,7 +81,7 @@ def test_temperature_cooling(session: Session):
     from tbc_worker_commitments.relationship import recompute_relationship_states
 
     _chat(session, chat_id=3)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for i in range(3):
         _mu(session, chat_id=3, message_id=i + 1,
             processed_at=now - timedelta(hours=i + 1),
@@ -100,7 +100,7 @@ def test_open_threads_collected(session: Session):
     from tbc_worker_commitments.relationship import recompute_relationship_states
 
     _chat(session, chat_id=4)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for i in range(3):
         _mu(session, chat_id=4, message_id=i + 1,
             processed_at=now - timedelta(hours=i + 1),

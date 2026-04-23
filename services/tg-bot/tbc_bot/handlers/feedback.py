@@ -14,10 +14,10 @@ import structlog
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-
-from tbc_bot.guards import is_owner
 from tbc_common.db.models import BriefFeedback
 from tbc_common.db.session import get_sessionmaker
+
+from tbc_bot.guards import is_owner
 
 log = structlog.get_logger(__name__)
 

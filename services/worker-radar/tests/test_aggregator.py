@@ -7,7 +7,7 @@ The `session` fixture is provided by ../conftest.py.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,7 @@ def _mu(
     """Helper to insert a MessageUnderstanding row."""
     from tbc_common.db.models import MessageUnderstanding
 
-    now = processed_at or datetime.now(timezone.utc)
+    now = processed_at or datetime.now(UTC)
     mu = MessageUnderstanding(
         chat_id=chat_id,
         message_id=message_id,
@@ -54,7 +54,7 @@ def test_new_signal_creates_alert(session: Session):
     from tbc_common.db.models import RadarAlert
     from tbc_worker_radar.aggregator import run_aggregation
 
-    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
     _mu(session, chat_id=10, message_id=100, is_signal=True, signal_type="buying", signal_strength=4)
 
     run_aggregation(session, epoch)
@@ -72,8 +72,8 @@ def test_second_signal_updates_existing_alert(session: Session):
     from tbc_common.db.models import RadarAlert
     from tbc_worker_radar.aggregator import run_aggregation
 
-    now = datetime.now(timezone.utc)
-    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    now = datetime.now(UTC)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
 
     _mu(session, chat_id=10, message_id=101, is_signal=True, signal_type="buying",
         signal_strength=2, processed_at=now - timedelta(hours=1))
@@ -109,7 +109,7 @@ def test_old_alert_creates_new(session: Session):
     from tbc_common.db.models import RadarAlert
     from tbc_worker_radar.aggregator import run_aggregation
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     old_time = now - timedelta(hours=26)
 
     # Create an old alert directly (backdated created_at)
@@ -130,7 +130,7 @@ def test_old_alert_creates_new(session: Session):
     _mu(session, chat_id=10, message_id=201, is_signal=True, signal_type="risk",
         signal_strength=3, processed_at=now)
 
-    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
     run_aggregation(session, epoch)
     assert session.query(RadarAlert).count() == 2
 
@@ -140,7 +140,7 @@ def test_alert_tag_format(session: Session):
     from tbc_common.db.models import RadarAlert
     from tbc_worker_radar.aggregator import run_aggregation
 
-    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
     _mu(session, chat_id=20, message_id=300, is_signal=True, signal_type="expansion", signal_strength=3)
 
     run_aggregation(session, epoch)
@@ -157,7 +157,7 @@ def test_non_signal_not_processed(session: Session):
     from tbc_common.db.models import RadarAlert
     from tbc_worker_radar.aggregator import run_aggregation
 
-    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
     _mu(session, chat_id=30, message_id=400, is_signal=False, signal_type=None)
 
     run_aggregation(session, epoch)
@@ -170,7 +170,7 @@ def test_old_alert_creates_new_v2(session: Session):
     from tbc_common.db.models import RadarAlert
     from tbc_worker_radar.aggregator import run_aggregation
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     old_time = now - timedelta(hours=26)
 
     # Insert old signal and create its alert directly (backdated)

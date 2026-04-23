@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from tbc_common.db.models import (
     BriefFeedback,
     Chat,
@@ -17,7 +16,6 @@ from tbc_common.db.models import (
     RadarAlert,
     RelationshipState,
 )
-from tbc_common.prompts import BRIEF_SYSTEM
 
 log = structlog.get_logger(__name__)
 
@@ -69,7 +67,7 @@ def build_cached_context(session: Session) -> str:
 
 def build_fresh_input(session: Session) -> tuple[str, list[int]]:
     """Build daily-varying fresh input. Returns (text, list of radar_alert ids included)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     yesterday = now - timedelta(hours=24)
     last_week = now - timedelta(days=7)
     today = date.today()
@@ -126,7 +124,7 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         lines.append("### You owe:")
         for c in user_commits:
             due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else ""
-            age_days = (now - c.created_at.replace(tzinfo=timezone.utc if c.created_at.tzinfo is None else c.created_at.tzinfo)).days
+            age_days = (now - c.created_at.replace(tzinfo=UTC if c.created_at.tzinfo is None else c.created_at.tzinfo)).days
             lines.append(f"- [age={age_days}d]{due} {c.description}")
     else:
         lines.append("### You owe: (none)")
@@ -142,7 +140,7 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         lines.append("### They owe you:")
         for c in cp_commits:
             due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else ""
-            age_days = (now - c.created_at.replace(tzinfo=timezone.utc if c.created_at.tzinfo is None else c.created_at.tzinfo)).days
+            age_days = (now - c.created_at.replace(tzinfo=UTC if c.created_at.tzinfo is None else c.created_at.tzinfo)).days
             lines.append(f"- [age={age_days}d]{due} {c.description}")
     else:
         lines.append("### They owe you: (none)")

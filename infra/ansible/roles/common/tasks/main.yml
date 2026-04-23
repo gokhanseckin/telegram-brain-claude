@@ -1,4 +1,21 @@
 ---
+# ── Floating IP (Hetzner requires manual OS-level config) ──────────────────────
+
+- name: Configure floating IP via netplan
+  copy:
+    dest: /etc/netplan/60-floating-ip.yaml
+    content: |
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            addresses:
+              - {{ floating_ip }}/32
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Apply netplan
+
 - name: Update apt cache
   apt:
     update_cache: true
@@ -137,8 +154,3 @@
     group: root
     mode: "0644"
 
-handlers:
-  - name: Restart fail2ban
-    systemd:
-      name: fail2ban
-      state: restarted

@@ -7,6 +7,7 @@ without a corresponding migration.
 
 from tbc_common.db.models import (
     Base,
+    BriefFeedback,
     Chat,
     ChatSummary,
     Commitment,
@@ -15,12 +16,12 @@ from tbc_common.db.models import (
     RadarAlert,
     RelationshipState,
     User,
-    BriefFeedback,
 )
 from tbc_common.db.session import get_engine, get_sessionmaker
 
 __all__ = [
     "Base",
+    "BriefFeedback",
     "Chat",
     "ChatSummary",
     "Commitment",
@@ -29,7 +30,6 @@ __all__ = [
     "RadarAlert",
     "RelationshipState",
     "User",
-    "BriefFeedback",
     "get_engine",
     "get_sessionmaker",
 ]

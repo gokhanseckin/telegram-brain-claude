@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from tbc_common.prompts import MODEL_VERSION
-from tbc_worker_understanding.schema import UnderstandingOutput
-
 
 VALID_RESPONSE: dict[str, Any] = {
     "language": "en",
@@ -33,7 +30,7 @@ def _make_message(chat_id: int = 1001, message_id: int = 1, text: str = "hello")
     msg.chat_id = chat_id
     msg.message_id = message_id
     msg.text = text
-    msg.sent_at = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
+    msg.sent_at = datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC)
     return msg
 
 

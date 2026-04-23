@@ -34,19 +34,19 @@
 
 # ── Clone / update repo ─────────────────────────────────────────────────────────
 
-- name: Ensure /opt/tbc parent directory exists
+- name: Ensure /opt/tbc directory exists with correct ownership
   file:
-    path: /opt
+    path: /opt/tbc
     state: directory
+    owner: tbc
+    group: tbc
     mode: "0755"
 
 - name: Clone or update the TBC repository
   git:
-    repo: "git@github.com:gokhanseckin/telegram-brain-claude.git"
+    repo: "https://github.com/gokhanseckin/telegram-brain-claude.git"
     dest: /opt/tbc
     version: main
-    accept_hostkey: true
-    key_file: "{{ ansible_ssh_private_key_file }}"
     force: false
   become_user: tbc
 
@@ -56,6 +56,14 @@
     owner: tbc
     group: tbc
     recurse: true
+
+- name: Copy .env to /etc/tbc/env
+  copy:
+    src: "{{ playbook_dir }}/../../.env"
+    dest: /etc/tbc/env
+    owner: tbc
+    group: tbc
+    mode: "0600"
 
 # ── Install Python dependencies ─────────────────────────────────────────────────
 
@@ -170,7 +178,3 @@
     - tbc-bot.service
     - tbc-mcp-server.service
 
-handlers:
-  - name: Reload systemd
-    systemd:
-      daemon_reload: true

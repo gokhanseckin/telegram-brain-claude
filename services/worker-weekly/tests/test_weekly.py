@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from tbc_common.prompts import WEEKLY_SYSTEM
-
 
 # ---------------------------------------------------------------------------
 # Helpers

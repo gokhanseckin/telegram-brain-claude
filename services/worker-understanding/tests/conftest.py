@@ -7,10 +7,11 @@ replaced by SQLite-compatible equivalents.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     Column,
@@ -18,15 +19,13 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
-    JSON,
     PrimaryKeyConstraint,
     SmallInteger,
-    String,
     Text,
     create_engine,
     func,
 )
-from sqlalchemy.orm import DeclarativeBase, Session, mapped_column, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
 class Base(DeclarativeBase):
@@ -120,7 +119,7 @@ def sample_message(db_session: Session, sample_chat: Chat) -> Message:
     msg = Message(
         chat_id=sample_chat.chat_id,
         message_id=1,
-        sent_at=datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc),
+        sent_at=datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC),
         text="Let's schedule a demo next week.",
         raw={},
     )

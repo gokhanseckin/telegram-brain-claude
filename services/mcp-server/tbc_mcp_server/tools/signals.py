@@ -7,7 +7,6 @@ from datetime import date, datetime
 import structlog
 from sqlalchemy import and_, desc, select
 from sqlalchemy.orm import Session
-
 from tbc_common.db.models import Chat, Message, MessageUnderstanding
 
 from ..models import SignalResult

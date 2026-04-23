@@ -8,13 +8,11 @@ either creates new radar_alerts or appends to existing open ones.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from tbc_common.db import MessageUnderstanding, RadarAlert
 
 logger = structlog.get_logger(__name__)
@@ -39,7 +37,7 @@ def _build_reasoning(tag: str, signals: list[MessageUnderstanding]) -> str:
 def _utc(dt: datetime) -> datetime:
     """Ensure a datetime is timezone-aware UTC. Handles SQLite naive datetimes."""
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -48,7 +46,7 @@ def run_aggregation(session: Session, last_checked_at: datetime) -> datetime:
 
     Returns the new last_checked_at value (should be stored by the caller).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # 1. Fetch all new signals since last_checked_at
     stmt = select(MessageUnderstanding).where(

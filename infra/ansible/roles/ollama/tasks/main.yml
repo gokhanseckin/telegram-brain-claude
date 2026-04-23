@@ -65,12 +65,3 @@
     OLLAMA_HOST: "http://127.0.0.1:11434"
   timeout: 1800   # 30 min
 
-handlers:
-  - name: Reload systemd
-    systemd:
-      daemon_reload: true
-
-  - name: Restart Ollama
-    systemd:
-      name: ollama
-      state: restarted

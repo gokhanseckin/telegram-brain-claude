@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime
 
 import httpx
 import structlog
 from anthropic import Anthropic
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-
 from tbc_common.config import settings
 from tbc_common.db.models import ChatSummary
 from tbc_common.prompts import WEEKLY_SYSTEM
@@ -102,7 +101,7 @@ def save_weekly(session: Session, weekly_text: str, monday: date) -> None:
         )
         .on_conflict_do_update(
             index_elements=["chat_id", "period", "period_start"],
-            set_={"summary": weekly_text, "generated_at": datetime.now(timezone.utc)},
+            set_={"summary": weekly_text, "generated_at": datetime.now(UTC)},
         )
     )
     session.execute(stmt)

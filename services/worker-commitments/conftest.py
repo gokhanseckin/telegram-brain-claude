@@ -1,8 +1,9 @@
 """Root conftest for worker-commitments tests."""
 from __future__ import annotations
 
-import sys
 import os
+import sys
+
 import sqlalchemy.types as sqltypes
 from sqlalchemy import BigInteger, Integer, create_engine
 from sqlalchemy.dialects.postgresql import JSONB

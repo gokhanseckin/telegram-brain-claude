@@ -6,13 +6,12 @@ message_understanding rows and upserts into the relationship_state table.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from tbc_common.db import Chat, MessageUnderstanding, RelationshipState
 
 logger = structlog.get_logger(__name__)
@@ -27,7 +26,7 @@ MAX_OPEN_THREADS = 5
 def _utc(dt: datetime) -> datetime:
     """Ensure a datetime is timezone-aware (UTC). Handles SQLite naive datetimes."""
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -62,7 +61,7 @@ def recompute_relationship_states(session: Session) -> int:
 
 
 def _recompute_one(session: Session, chat_id: int) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     all_mu = list(
         session.scalars(

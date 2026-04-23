@@ -10,12 +10,10 @@ verifies that:
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -36,7 +34,7 @@ def make_fake_tg_message(
     msg.chat_id = chat_id
     msg.sender_id = sender_id
     msg.message = text
-    msg.date = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    msg.date = datetime(2024, 1, 1, tzinfo=UTC)
     msg.edit_date = None
     msg.reply_to = None
     msg.to_dict.return_value = {
@@ -56,7 +54,7 @@ def make_fake_tg_message(
 @pytest.mark.asyncio
 async def test_gap_recovery_stores_all_messages_from_multiple_pages():
     """Messages from two pages should all be inserted, with a sleep between pages."""
-    from tbc_ingestion.gap_recovery import _recover_chat, _PAGE_LIMIT, _PAGE_SLEEP_SECONDS
+    from tbc_ingestion.gap_recovery import _PAGE_LIMIT, _PAGE_SLEEP_SECONDS, _recover_chat
 
     chat_id = 100
 

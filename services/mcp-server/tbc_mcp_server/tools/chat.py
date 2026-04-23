@@ -7,11 +7,10 @@ from datetime import date, datetime, timedelta
 import structlog
 from sqlalchemy import and_, desc, select
 from sqlalchemy.orm import Session
-
 from tbc_common.db.models import Chat, ChatSummary, Message, MessageUnderstanding, User
 
 from ..models import ChatListItem, ChatSummaryResult, MessageResult
-from .search import _make_deep_link, _row_to_message_result
+from .search import _row_to_message_result
 
 log = structlog.get_logger(__name__)
 

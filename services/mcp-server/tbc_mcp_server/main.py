@@ -11,29 +11,16 @@ from datetime import date, datetime
 
 import structlog
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
 from sqlalchemy.orm import Session
 from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
-
 from tbc_common.logging import configure_logging
 
 from .auth import BearerTokenMiddleware
-from .db import get_db
-from .models import (
-    BriefText,
-    ChatListItem,
-    ChatSummaryResult,
-    CommitmentResult,
-    MessageResult,
-    RelationshipStateResult,
-    SignalResult,
-)
 from .tools.brief import get_recent_brief
 from .tools.chat import get_chat_history, get_chat_summary, list_chats
 from .tools.commitments import get_commitments
@@ -402,8 +389,6 @@ app = Starlette(
 )
 
 # Attach the bearer token middleware at the top level so /mcp is also protected
-from starlette.middleware import Middleware  # noqa: E402
-from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 
 app.add_middleware(BearerTokenMiddleware)
 

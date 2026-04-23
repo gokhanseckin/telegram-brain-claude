@@ -5,7 +5,6 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
-
 from tbc_worker_understanding.ollama_client import OllamaClient
 
 

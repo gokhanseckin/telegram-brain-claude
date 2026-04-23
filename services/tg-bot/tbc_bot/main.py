@@ -13,10 +13,10 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-
-from tbc_bot.handlers import commands, feedback, onboarding
 from tbc_common.config import settings
 from tbc_common.logging import configure_logging
+
+from tbc_bot.handlers import commands, feedback, onboarding
 
 log = structlog.get_logger(__name__)
 

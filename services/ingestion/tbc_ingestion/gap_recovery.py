@@ -10,17 +10,15 @@ See docs/mvp-spec.md §3 (gap recovery) and §9 (flood-wait handling).
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 from typing import Any
 
 import structlog
 from sqlalchemy import select
+from tbc_common.db.models import Chat, Message, User
+from tbc_common.db.session import get_sessionmaker
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError
 from telethon.tl.types import Message as TgMessage
-
-from tbc_common.db.models import Chat, Message, User
-from tbc_common.db.session import get_sessionmaker
 
 log = structlog.get_logger(__name__)
 

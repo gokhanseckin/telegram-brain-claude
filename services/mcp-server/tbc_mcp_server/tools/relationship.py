@@ -5,7 +5,6 @@ from __future__ import annotations
 import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from tbc_common.db.models import Chat, RelationshipState
 
 from ..models import RelationshipStateResult

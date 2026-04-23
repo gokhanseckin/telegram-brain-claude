@@ -7,7 +7,6 @@ import asyncio
 import structlog
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
 from tbc_common.config import settings
 from tbc_common.db.models import Message
 from tbc_common.db.session import get_sessionmaker

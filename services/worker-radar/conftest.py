@@ -6,8 +6,9 @@ column types so SQLite can handle them.
 """
 from __future__ import annotations
 
-import sys
 import os
+import sys
+
 import sqlalchemy.types as sqltypes
 from sqlalchemy import BigInteger, Integer, create_engine
 from sqlalchemy.dialects.postgresql import JSONB

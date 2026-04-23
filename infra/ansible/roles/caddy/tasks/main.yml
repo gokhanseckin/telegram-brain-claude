@@ -62,8 +62,3 @@
     enabled: true
     state: started
 
-handlers:
-  - name: Reload Caddy
-    systemd:
-      name: caddy
-      state: reloaded

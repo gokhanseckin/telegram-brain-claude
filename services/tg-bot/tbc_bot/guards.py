@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from aiogram.types import Message
-
 from tbc_common.config import settings
 
 

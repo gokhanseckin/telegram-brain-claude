@@ -6,9 +6,8 @@ from datetime import date, datetime
 
 import httpx
 import structlog
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, select, text
 from sqlalchemy.orm import Session
-
 from tbc_common.config import settings
 from tbc_common.db.models import Chat, Message, MessageUnderstanding, User
 

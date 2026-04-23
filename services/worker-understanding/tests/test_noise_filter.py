@@ -5,12 +5,10 @@ Uses the SQLite-compatible models defined in conftest.py.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
 from tbc_common.prompts import MODEL_VERSION
 
 from .conftest import Chat, Message
@@ -42,7 +40,7 @@ def _insert_chat_and_message(
     msg = Message(
         chat_id=chat_id,
         message_id=message_id,
-        sent_at=datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc),
+        sent_at=datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC),
         text="Some business message",
         raw={},
     )
