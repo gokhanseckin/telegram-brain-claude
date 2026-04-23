@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-04-23 — CI hygiene: lint-and-test green for the first time
+
+### ci: fix mypy strict + pytest collection on main ([#22](https://github.com/gokhanseckin/telegram-brain-claude/pull/22))
+
+`CI / lint-and-test` had been red on every push to `main` since the project started. Deploy-to-VPS is a separate workflow and succeeds, so prod kept shipping regardless — this was pure hygiene. The root cause was a pair of duplicate-module errors that blocked `mypy` before it could finish, masking the real type errors, and the same collision broke `pytest` collection:
+
+- Every `services/*/tests/__init__.py` resolved to module name `tests`.
+- `services/worker-radar/conftest.py` and `services/worker-commitments/conftest.py` both resolved to module name `conftest`.
+
+**Config (`pyproject.toml`):**
+- `[tool.mypy]` `exclude = ['(^|/)tests/', '(^|/)conftest\.py$']` — tests don't need strict typing and share names across services; source code stays `strict = true`.
+- `[tool.pytest.ini_options]` `addopts = "--import-mode=importlib"` — the standard fix for duplicate test package names in a monorepo ([pytest docs](https://docs.pytest.org/en/stable/explanation/goodpractices.html#tests-outside-application-code)).
+
+**Source fixes (45 real mypy errors across 8 files, all targeted — strict stays on, no blanket suppressions):**
+- `services/worker-brief/tbc_worker_brief/assembler.py`: `.where(expr if cond else True)` → guarded `if`.
+- `services/worker-brief/tbc_worker_brief/sender.py`, `services/worker-weekly/tbc_worker_weekly/sender.py`: Anthropic SDK's `response.content[0]` is a big union that doesn't guarantee `.text` — wrapped with `cast(TextBlock, …)` / `cast(BetaTextBlock, …)`.
+- `services/ingestion/tbc_ingestion/handlers.py`: narrow `# type: ignore[untyped-decorator]` on the three Telethon `@client.on(...)` decorators.
+- `services/tg-bot/tbc_bot/guards.py`: wrapped return in `bool(...)`.
+- `services/tg-bot/tbc_bot/handlers/onboarding.py`, `services/tg-bot/tbc_bot/handlers/chat.py`, `services/tg-bot/tbc_bot/agent.py`: `list[dict]` → `list[dict[str, Any]]`.
+- `services/mcp-server/tbc_mcp_server/auth.py`: properly typed `BaseHTTPMiddleware.dispatch` (`call_next: RequestResponseEndpoint`, `-> Response`); dropped stale `# type: ignore[override]`.
+- `services/mcp-server/tbc_mcp_server/main.py`: `cast(Session, get_sessionmaker()())`; narrow `# type: ignore[untyped-decorator, no-untyped-call]` on MCP SDK decorators; renamed five reassigned `results` locals so mypy doesn't narrow to the first branch's return type.
+
+No test files or CI workflow files were modified; the "Prune missing workspace members" step is still a no-op on `main` and stays untouched.
+
+Verified locally and in CI: `ruff` clean, `mypy` "no issues found in 64 source files", `pytest -m "not real_ollama" -q` → 65 passed.
+
 ## 2026-04-23 — Initial backfill hardening
 
 Three changes to make the one-time onboarding backfill actually work end-to-end on first deploy. PRs landed in this order:
