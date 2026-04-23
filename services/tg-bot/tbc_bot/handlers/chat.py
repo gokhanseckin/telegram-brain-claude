@@ -29,6 +29,13 @@ async def cmd_reset(message: Message) -> None:
     await message.answer("Conversation history cleared.")
 
 
+@router.message(F.text.startswith("/"))
+async def unknown_command(message: Message) -> None:
+    if not is_owner(message):
+        return
+    await message.answer("No such command. Please type /help for help.")
+
+
 @router.message(F.text)
 async def handle_text(message: Message) -> None:
     if not is_owner(message):

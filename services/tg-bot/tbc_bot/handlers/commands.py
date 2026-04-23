@@ -156,3 +156,26 @@ async def cmd_status(message: Message) -> None:
         f"Last understanding: {last_understanding_ts.isoformat() if last_understanding_ts else 'N/A'}",
     ]
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    if not is_owner(message):
+        return
+    await message.answer(
+        "Available commands:\n"
+        "/help — show this help\n"
+        "/start — onboarding\n"
+        "/tag — re-run chat tagging\n"
+        "/ignore [ChatName] — ignore current chat or a chat by name\n"
+        "/brief — generate today's brief now\n"
+        "/weekly — generate weekly review now\n"
+        "/search <query> — keyword search over messages\n"
+        "/pause — pause ingestion\n"
+        "/resume — resume ingestion\n"
+        "/status — show ingestion health\n"
+        "/feedback — give feedback on a brief item\n"
+        "/reset — clear Claude conversation history\n"
+        "\nAny message without a leading / is sent to Claude.",
+        parse_mode=None,
+    )
