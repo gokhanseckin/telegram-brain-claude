@@ -16,7 +16,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from tbc_common.config import settings
 from tbc_common.logging import configure_logging
 
-from tbc_bot.handlers import commands, feedback, onboarding
+from tbc_bot.handlers import chat, commands, feedback, onboarding
 
 log = structlog.get_logger(__name__)
 
@@ -36,10 +36,11 @@ async def main() -> None:
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
 
-    # Register routers
+    # Register routers — chat must be last so commands take priority
     dp.include_router(onboarding.router)
     dp.include_router(feedback.router)
     dp.include_router(commands.router)
+    dp.include_router(chat.router)
 
     log.info("bot_starting", owner_user_id=settings.tg_owner_user_id)
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
