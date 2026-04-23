@@ -47,11 +47,11 @@ async def run_loop() -> None:
     configure_logging("worker-understanding")
     log.info("starting", model_version=MODEL_VERSION)
 
-    Session = get_sessionmaker()
+    session_factory = get_sessionmaker()
     ollama = OllamaClient(settings.ollama_base_url)
 
     while True:
-        with Session() as session:
+        with session_factory() as session:
             pending = _poll(session)
 
         if not pending:
@@ -60,7 +60,7 @@ async def run_loop() -> None:
             continue
 
         for chat_id, message_id in pending:
-            with Session() as session:
+            with session_factory() as session:
                 message = session.get(Message, (chat_id, message_id))
                 if message is None:
                     continue

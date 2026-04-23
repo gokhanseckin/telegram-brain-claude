@@ -25,13 +25,13 @@ def main() -> None:
     log = structlog.get_logger("worker_radar.main")
     log.info("starting", poll_interval=POLL_INTERVAL_SECONDS)
 
-    Session = get_sessionmaker()
+    session_factory = get_sessionmaker()
     # Start from epoch so we catch everything on first run
     last_checked_at: datetime = datetime(1970, 1, 1, tzinfo=UTC)
 
     while True:
         try:
-            with Session() as session:
+            with session_factory() as session:
                 last_checked_at = run_aggregation(session, last_checked_at)
         except Exception:
             log.exception("aggregation_error")

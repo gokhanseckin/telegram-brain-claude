@@ -30,8 +30,8 @@ _PAGE_SLEEP_SECONDS = 1.0
 
 async def run_gap_recovery(client: TelegramClient) -> None:
     """Backfill missing messages for all non-ignored known chats."""
-    Session = get_sessionmaker()
-    with Session() as session:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
         stmt = select(Chat).where(
             ((Chat.tag != "ignore") | (Chat.tag.is_(None)))
             & (Chat.type != "channel")
@@ -56,10 +56,10 @@ async def run_gap_recovery(client: TelegramClient) -> None:
 
 async def _recover_chat(client: TelegramClient, chat_id: int) -> None:
     """Fetch and store all messages newer than what we already have."""
-    Session = get_sessionmaker()
+    session_factory = get_sessionmaker()
 
     # Find the highest message_id already stored for this chat.
-    with Session() as session:
+    with session_factory() as session:
         from sqlalchemy import func as sa_func
 
         result = session.execute(
@@ -130,12 +130,12 @@ async def _store_messages(
 
     sender_ids: set[int] = {m.sender_id for m in tg_messages if m.sender_id is not None}
 
-    Session = get_sessionmaker()
+    session_factory = get_sessionmaker()
 
     # Phase 1: resolve + insert any missing Users. Commit before touching Messages.
     resolved: set[int] = set()
     if sender_ids:
-        with Session() as session:
+        with session_factory() as session:
             existing = set(
                 session.scalars(
                     select(User.user_id).where(User.user_id.in_(sender_ids))
@@ -160,7 +160,7 @@ async def _store_messages(
             session.commit()
 
     # Phase 2: insert Messages, nulling sender_id for any still-unresolved sender.
-    with Session() as session:
+    with session_factory() as session:
         for msg in tg_messages:
             if session.get(Message, (chat_id, msg.id)) is not None:
                 continue

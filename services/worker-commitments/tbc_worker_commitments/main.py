@@ -35,7 +35,7 @@ def main() -> None:
         stale_interval=STALE_INTERVAL_S,
     )
 
-    Session = get_sessionmaker()
+    session_factory = get_sessionmaker()
 
     last_relationship_run: float = 0.0
     last_stale_run: float = 0.0
@@ -45,7 +45,7 @@ def main() -> None:
 
         # Job 1: Commitment extraction (every 30s)
         try:
-            with Session() as session:
+            with session_factory() as session:
                 created = extract_commitments(session)
                 if created:
                     log.info("extraction_done", created=created)
@@ -55,7 +55,7 @@ def main() -> None:
         # Job 2: Relationship state (every 10 min)
         if now - last_relationship_run >= RELATIONSHIP_INTERVAL_S:
             try:
-                with Session() as session:
+                with session_factory() as session:
                     updated = recompute_relationship_states(session)
                     log.info("relationship_recompute_done", updated=updated)
             except Exception:
@@ -65,7 +65,7 @@ def main() -> None:
         # Job 3: Stale detection (every hour)
         if now - last_stale_run >= STALE_INTERVAL_S:
             try:
-                with Session() as session:
+                with session_factory() as session:
                     staled = mark_stale_commitments(session)
                     log.info("stale_detection_done", staled=staled)
             except Exception:

@@ -7,6 +7,7 @@ Auth: Bearer token middleware (see auth.py).
 from __future__ import annotations
 
 import contextlib
+import json
 from datetime import date, datetime
 from typing import cast
 
@@ -238,8 +239,6 @@ async def handle_list_tools() -> list[Tool]:
 
 @mcp_server.call_tool()  # type: ignore[untyped-decorator]
 async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:  # type: ignore[type-arg]
-    import json
-
     db = _db()
     try:
         result = await _dispatch_tool(name, arguments, db)
@@ -348,7 +347,6 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
 # ---------------------------------------------------------------------------
 
 fastapi_app = FastAPI(title="TBC MCP Server", version="0.1.0")
-fastapi_app.add_middleware(BearerTokenMiddleware)
 
 
 @fastapi_app.get("/health")
@@ -385,6 +383,11 @@ class _Router:
 
 @contextlib.asynccontextmanager
 async def lifespan(app: Starlette):  # type: ignore[no-untyped-def]
+    from tbc_common.config import settings as _settings
+
+    if not _settings.mcp_bearer_token or not _settings.mcp_bearer_token.get_secret_value():
+        raise RuntimeError("TBC_MCP_BEARER_TOKEN must be set to a non-empty value")
+
     log.info("Starting TBC MCP Server")
     async with session_manager.run():
         yield

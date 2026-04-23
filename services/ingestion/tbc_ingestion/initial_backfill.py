@@ -35,8 +35,8 @@ _PAGE_SIZE = 100
 
 
 def _load_state() -> ServiceState:
-    Session = get_sessionmaker()
-    with Session() as session:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
         state = session.get(ServiceState, 1)
         if state is None:
             state = ServiceState(id=1)
@@ -48,8 +48,8 @@ def _load_state() -> ServiceState:
 
 
 def _mark_started() -> None:
-    Session = get_sessionmaker()
-    with Session() as session:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
         state = session.get(ServiceState, 1)
         if state is None:
             state = ServiceState(id=1)
@@ -59,8 +59,8 @@ def _mark_started() -> None:
 
 
 def _mark_done() -> None:
-    Session = get_sessionmaker()
-    with Session() as session:
+    session_factory = get_sessionmaker()
+    with session_factory() as session:
         state = session.get(ServiceState, 1)
         if state is None:
             state = ServiceState(id=1)
@@ -108,8 +108,8 @@ async def run_initial_backfill(client: TelegramClient) -> None:
 
         try:
             # Dialog is active — create the chat row so /tag can see it, then backfill.
-            Session = get_sessionmaker()
-            with Session() as session:
+            session_factory = get_sessionmaker()
+            with session_factory() as session:
                 _upsert_chat(session, chat_id, entity)
                 session.commit()
 
