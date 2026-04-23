@@ -7,12 +7,21 @@ import re
 from pathlib import Path
 
 import structlog
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from sqlalchemy import func, select, text
 
 from tbc_bot.guards import is_owner
+from tbc_bot.handlers.onboarding import perform_ignore_and_delete
+from tbc_common.config import settings
 from tbc_common.db.models import Chat
 from tbc_common.db.models import Message as TgMessage
 from tbc_common.db.models import MessageUnderstanding
@@ -27,35 +36,88 @@ TRIGGER_WEEKLY = Path("/tmp/tbc_trigger_weekly")
 PAUSE_FILE = Path("/tmp/tbc_pause")
 
 
+class IgnoreCmdState(StatesGroup):
+    confirm = State()
+
+
+def _ignore_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Yes — Ignore & Delete", callback_data="ignorecmd:confirm"
+                ),
+                InlineKeyboardButton(
+                    text="No — Cancel", callback_data="ignorecmd:cancel"
+                ),
+            ]
+        ]
+    )
+
+
 @router.message(Command("ignore"))
-async def cmd_ignore(message: Message) -> None:
+async def cmd_ignore(message: Message, state: FSMContext) -> None:
     if not is_owner(message):
         return
 
     args = (message.text or "").split(maxsplit=1)
     chat_name = args[1].strip() if len(args) > 1 else None
 
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
-    sm = get_sessionmaker()
-
-    if chat_name:
-        with sm() as session:
-            stmt = select(Chat).where(Chat.title.ilike(f"%{chat_name}%")).limit(1)
-            chat = session.scalars(stmt).first()
-            if chat:
-                chat.tag = "ignore"
-                chat.tag_set_at = now
-                session.commit()
-                await message.answer(f"Marked '{chat.title}' as ignored.")
-            else:
-                await message.answer(f"No chat found matching '{chat_name}'.")
-    else:
+    if not chat_name:
         await message.answer(
             "To ignore a chat, use: /ignore ChatName\n"
             "(Direct chat context is not available in polling mode.)"
         )
+        return
+
+    sm = get_sessionmaker()
+    with sm() as session:
+        stmt = select(Chat).where(Chat.title.ilike(f"%{chat_name}%")).limit(1)
+        chat = session.scalars(stmt).first()
+        if chat is None:
+            await message.answer(f"No chat found matching '{chat_name}'.")
+            return
+        chat_id = chat.chat_id
+        chat_title = chat.title
+
+    await state.update_data(pending_ignore_chat_id=chat_id, pending_ignore_title=chat_title)
+    await state.set_state(IgnoreCmdState.confirm)
+    await message.answer(
+        f"Are you sure? Messages from '{chat_title}' will be ignored and "
+        "existing messages will be deleted.",
+        reply_markup=_ignore_confirm_keyboard(),
+    )
+
+
+@router.callback_query(IgnoreCmdState.confirm, F.data == "ignorecmd:confirm")
+async def on_ignorecmd_confirm(query: CallbackQuery, state: FSMContext) -> None:
+    if query.from_user.id != settings.tg_owner_user_id:
+        await query.answer()
+        return
+    data = await state.get_data()
+    chat_id = data.get("pending_ignore_chat_id")
+    title = data.get("pending_ignore_title") or f"chat_{chat_id}"
+    await state.clear()
+    if chat_id is None:
+        await query.answer()
+        return
+    deleted = perform_ignore_and_delete(int(chat_id))
+    await query.answer()
+    if query.message:
+        await query.message.answer(
+            f"Ignored '{title}'. {deleted} messages deleted."
+        )
+
+
+@router.callback_query(IgnoreCmdState.confirm, F.data == "ignorecmd:cancel")
+async def on_ignorecmd_cancel(query: CallbackQuery, state: FSMContext) -> None:
+    if query.from_user.id != settings.tg_owner_user_id:
+        await query.answer()
+        return
+    await state.clear()
+    await query.answer("Cancelled.")
+    if query.message:
+        await query.message.answer("Cancelled — nothing changed.")
 
 
 @router.message(Command("brief"))

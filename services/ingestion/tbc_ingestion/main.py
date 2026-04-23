@@ -32,6 +32,7 @@ from tbc_common.logging import configure_logging
 from .client import build_client
 from .gap_recovery import run_gap_recovery
 from .handlers import register_handlers
+from .initial_backfill import run_initial_backfill
 from .pause import start_pause_monitor
 
 log = structlog.get_logger(__name__)
@@ -62,6 +63,9 @@ async def _async_main() -> None:
 
     # Start the pause-file monitor as a background task.
     asyncio.create_task(start_pause_monitor())
+
+    # One-time 30-day backfill on first deploy (no-op after first success).
+    await run_initial_backfill(client)
 
     # Back-fill any messages that arrived while the service was offline.
     log.info("starting_gap_recovery")

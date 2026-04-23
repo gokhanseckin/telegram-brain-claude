@@ -183,6 +183,20 @@ class ChatSummary(Base):
     __table_args__ = (UniqueConstraint("chat_id", "period", "period_start"),)
 
 
+class ServiceState(Base):
+    """Single-row table tracking one-time service lifecycle events."""
+
+    __tablename__ = "service_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    initial_backfill_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    initial_backfill_done_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+
 class BriefFeedback(Base):
     __tablename__ = "brief_feedback"
 
