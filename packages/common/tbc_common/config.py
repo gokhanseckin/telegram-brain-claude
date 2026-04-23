@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # MCP server
     mcp_bearer_token: SecretStr | None = Field(default=None, validation_alias="TBC_MCP_BEARER_TOKEN")
     mcp_public_url: str = Field(
-        default="https://mcp.example.com", validation_alias="TBC_MCP_PUBLIC_URL"
+        default="", validation_alias="TBC_MCP_PUBLIC_URL"
     )
 
     # Logging

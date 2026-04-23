@@ -26,6 +26,10 @@ async def main() -> None:
     token = settings.tg_bot_token
     if token is None:
         raise RuntimeError("TBC_TG_BOT_TOKEN is not set")
+    if settings.tg_owner_user_id is None:
+        raise RuntimeError("TBC_TG_OWNER_USER_ID is not set")
+    if not settings.mcp_public_url:
+        raise RuntimeError("TBC_MCP_PUBLIC_URL is not set")
 
     bot = Bot(
         token=token.get_secret_value(),
