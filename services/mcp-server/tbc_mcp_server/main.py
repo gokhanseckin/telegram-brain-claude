@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 from datetime import date, datetime
+from typing import cast
 
 import structlog
 import uvicorn
@@ -42,10 +43,10 @@ mcp_server = Server("tbc-mcp-server")
 def _db() -> Session:
     """Get a DB session (used inside MCP tool handlers)."""
     from tbc_common.db.session import get_sessionmaker
-    return get_sessionmaker()()
+    return cast(Session, get_sessionmaker()())
 
 
-@mcp_server.list_tools()
+@mcp_server.list_tools()  # type: ignore[no-untyped-call, untyped-decorator]
 async def handle_list_tools() -> list[Tool]:
     return [
         Tool(
@@ -235,7 +236,7 @@ async def handle_list_tools() -> list[Tool]:
     ]
 
 
-@mcp_server.call_tool()
+@mcp_server.call_tool()  # type: ignore[untyped-decorator]
 async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:  # type: ignore[type-arg]
     import json
 
@@ -289,49 +290,49 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
         return [r.model_dump() for r in results]
 
     elif name == "list_chats":
-        results = list_chats(
+        chat_items = list_chats(
             db,
             tag=args.get("tag"),
             include_untagged=args.get("include_untagged", False),
         )
-        return [r.model_dump() for r in results]
+        return [r.model_dump() for r in chat_items]
 
     elif name == "get_chat_summary":
-        results = get_chat_summary(
+        summaries = get_chat_summary(
             db,
             chat_id=args["chat_id"],
             period=args.get("period", "week"),
             periods_back=args.get("periods_back", 1),
         )
-        return [r.model_dump() for r in results]
+        return [r.model_dump() for r in summaries]
 
     elif name == "get_commitments":
-        results = get_commitments(
+        commitments = get_commitments(
             db,
             status=args.get("status"),
             owner=args.get("owner"),
             chat_id=args.get("chat_id"),
             overdue_only=args.get("overdue_only", False),
         )
-        return [r.model_dump() for r in results]
+        return [r.model_dump() for r in commitments]
 
     elif name == "get_signals":
         date_from = date.fromisoformat(args["date_from"]) if args.get("date_from") else None
-        results = get_signals(
+        signals = get_signals(
             db,
             signal_types=args.get("signal_types"),
             min_strength=args.get("min_strength", 1),
             date_from=date_from,
             chat_ids=args.get("chat_ids"),
         )
-        return [r.model_dump() for r in results]
+        return [r.model_dump() for r in signals]
 
     elif name == "get_relationship_state":
-        results = get_relationship_state(
+        rel_state = get_relationship_state(
             db,
             chat_id=args.get("chat_id"),
         )
-        return [r.model_dump() for r in results]
+        return [r.model_dump() for r in rel_state]
 
     elif name == "get_recent_brief":
         date_filter = date.fromisoformat(args["date"]) if args.get("date") else None

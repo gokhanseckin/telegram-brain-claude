@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from typing import cast
 
 import httpx
 import structlog
 from anthropic import Anthropic
+from anthropic.types import TextBlock
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from tbc_common.config import settings
@@ -54,7 +56,7 @@ def call_anthropic(cached_context: str, fresh_input: str) -> str:
         ],
     )
 
-    return response.content[0].text
+    return cast(TextBlock, response.content[0]).text
 
 
 def post_to_telegram(text: str) -> None:

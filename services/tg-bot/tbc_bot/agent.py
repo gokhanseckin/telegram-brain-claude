@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 from anthropic import AsyncAnthropic
 from tbc_common.config import settings
@@ -28,7 +30,7 @@ def _get_client() -> AsyncAnthropic:
     return _client
 
 
-async def ask(history: list[dict], user_text: str) -> str:
+async def ask(history: list[dict[str, Any]], user_text: str) -> str:
     """Call Claude with MCP access. Returns the response text."""
     client = _get_client()
 
@@ -43,7 +45,7 @@ async def ask(history: list[dict], user_text: str) -> str:
         max_tokens=4096,
         system=SYSTEM_PROMPT,
         messages=messages,  # type: ignore[arg-type]
-        mcp_servers=[  # type: ignore[call-overload]
+        mcp_servers=[
             {
                 "type": "url",
                 "url": f"{settings.mcp_public_url}/mcp",

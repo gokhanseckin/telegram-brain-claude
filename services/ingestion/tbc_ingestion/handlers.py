@@ -117,7 +117,7 @@ def _upsert_chat(session: Session, chat_id: int, entity: Any) -> None:
 def register_handlers(client: TelegramClient) -> None:
     """Attach all three event handlers to the client."""
 
-    @client.on(events.NewMessage)
+    @client.on(events.NewMessage)  # type: ignore[untyped-decorator]
     async def on_new_message(event: events.NewMessage.Event) -> None:
         if is_paused():
             return
@@ -129,7 +129,7 @@ def register_handlers(client: TelegramClient) -> None:
         except Exception:
             log.exception("error_in_new_message_handler")
 
-    @client.on(events.MessageEdited)
+    @client.on(events.MessageEdited)  # type: ignore[untyped-decorator]
     async def on_message_edited(event: events.MessageEdited.Event) -> None:
         if is_paused():
             return
@@ -138,7 +138,7 @@ def register_handlers(client: TelegramClient) -> None:
         except Exception:
             log.exception("error_in_message_edited_handler")
 
-    @client.on(events.MessageDeleted)
+    @client.on(events.MessageDeleted)  # type: ignore[untyped-decorator]
     async def on_message_deleted(event: events.MessageDeleted.Event) -> None:
         if is_paused():
             return
