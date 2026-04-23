@@ -15,6 +15,7 @@ from tbc_common.db.models import (
     MessageUnderstanding,
     RadarAlert,
     RelationshipState,
+    ServiceState,
     User,
 )
 from tbc_common.db.session import get_engine, get_sessionmaker
@@ -29,6 +30,7 @@ __all__ = [
     "MessageUnderstanding",
     "RadarAlert",
     "RelationshipState",
+    "ServiceState",
     "User",
     "get_engine",
     "get_sessionmaker",
