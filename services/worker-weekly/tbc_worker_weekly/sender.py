@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, date, datetime
+from typing import cast
 
 import httpx
 import structlog
 from anthropic import Anthropic
+from anthropic.types.beta import BetaTextBlock
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from tbc_common.config import settings
@@ -64,7 +66,7 @@ def call_batch_api(weekly_input: str, today: date) -> str:
     if result.result.type != "succeeded":
         raise RuntimeError(f"Batch request failed: {result.result}")
 
-    return result.result.message.content[0].text
+    return cast(BetaTextBlock, result.result.message.content[0]).text
 
 
 def post_to_telegram(text: str) -> None:

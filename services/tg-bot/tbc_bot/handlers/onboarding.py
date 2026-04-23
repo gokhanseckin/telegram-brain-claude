@@ -8,6 +8,7 @@ chat before moving to the next.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from aiogram import F, Router
@@ -85,7 +86,7 @@ def _last_messages_preview(session: Session, chat_id: int) -> str:
 
 async def _send_next_chat(trigger: Message | CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    chats: list[dict] = data.get("chats", [])
+    chats: list[dict[str, Any]] = data.get("chats", [])
     idx: int = data.get("idx", 0)
 
     target_msg: Message | None = (
@@ -158,7 +159,7 @@ async def on_tag_button(query: CallbackQuery, state: FSMContext) -> None:
 
     chosen_tag = (query.data or "tag:skip").split(":", 1)[1]
     data = await state.get_data()
-    chats: list[dict] = data["chats"]
+    chats: list[dict[str, Any]] = data["chats"]
     idx: int = data["idx"]
     chat_data = chats[idx]
 

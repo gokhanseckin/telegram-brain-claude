@@ -85,14 +85,15 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         ).all()
     ]
 
-    mu_rows = session.execute(
+    mu_query = (
         select(MessageUnderstanding, Message, Chat)
         .join(Message, (Message.chat_id == MessageUnderstanding.chat_id) & (Message.message_id == MessageUnderstanding.message_id))
         .join(Chat, Chat.chat_id == MessageUnderstanding.chat_id)
         .where(Message.sent_at >= yesterday)
-        .where(MessageUnderstanding.chat_id.notin_(ignored_chat_ids) if ignored_chat_ids else True)
-        .order_by(Message.sent_at)
-    ).all()
+    )
+    if ignored_chat_ids:
+        mu_query = mu_query.where(MessageUnderstanding.chat_id.notin_(ignored_chat_ids))
+    mu_rows = session.execute(mu_query.order_by(Message.sent_at)).all()
 
     for mu, msg, chat in mu_rows:
         if not mu.summary_en:
