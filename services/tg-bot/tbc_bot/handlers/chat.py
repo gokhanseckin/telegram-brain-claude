@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any
 
 import structlog
 from aiogram import F, Router
 from aiogram.enums import ChatAction
 from aiogram.filters import Command
 from aiogram.types import Message
+
 from tbc_bot.agent import ask
 from tbc_bot.guards import is_owner
 
@@ -17,7 +19,7 @@ log = structlog.get_logger(__name__)
 router = Router(name="chat")
 
 # Per-chat conversation history: chat_id -> [{role, content}, ...]
-_history: dict[int, list[dict]] = defaultdict(list)
+_history: dict[int, list[dict[str, Any]]] = defaultdict(list)
 _MAX_HISTORY = 20  # 10 turns (user + assistant pairs)
 
 
