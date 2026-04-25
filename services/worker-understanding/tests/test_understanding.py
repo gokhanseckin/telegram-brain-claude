@@ -84,8 +84,8 @@ async def test_valid_json_writes_row() -> None:
 
 
 @pytest.mark.asyncio
-async def test_malformed_json_skips_message() -> None:
-    """Malformed JSON should not write anything and should not raise."""
+async def test_malformed_json_persists_failed_row() -> None:
+    """Malformed JSON writes a minimal row (embedding only) so the queue advances."""
     from tbc_worker_understanding.processor import process_message
 
     message = _make_message()
@@ -93,6 +93,9 @@ async def test_malformed_json_skips_message() -> None:
     ollama = _make_ollama_mock("not json at all {{{")
 
     with patch("tbc_worker_understanding.processor.pg_insert") as mock_insert:
+        mock_stmt = MagicMock()
+        mock_insert.return_value.values.return_value.on_conflict_do_update.return_value = mock_stmt
+
         await process_message(
             message=message,
             session=session,
@@ -101,9 +104,40 @@ async def test_malformed_json_skips_message() -> None:
             embedding_model="embed-model",
         )
 
-    # pg_insert should never have been called
-    mock_insert.assert_not_called()
-    session.commit.assert_not_called()
+    insert_call_kwargs = mock_insert.return_value.values.call_args.kwargs
+    assert insert_call_kwargs["model_version"] == MODEL_VERSION
+    assert "summary_en" not in insert_call_kwargs
+    assert "is_commitment" not in insert_call_kwargs
+    assert insert_call_kwargs["embedding"] is not None
+    session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_markdown_fenced_json_is_parsed() -> None:
+    """Responses wrapped in ```json ... ``` should still parse successfully."""
+    from tbc_worker_understanding.processor import process_message
+
+    fenced = "```json\n" + json.dumps(VALID_RESPONSE) + "\n```"
+    message = _make_message()
+    session = _make_session_mock()
+    ollama = _make_ollama_mock(fenced)
+
+    with patch("tbc_worker_understanding.processor.pg_insert") as mock_insert:
+        mock_stmt = MagicMock()
+        mock_insert.return_value.values.return_value.on_conflict_do_update.return_value = mock_stmt
+
+        await process_message(
+            message=message,
+            session=session,
+            ollama=ollama,
+            understanding_model="test-model",
+            embedding_model="embed-model",
+        )
+
+    kwargs = mock_insert.return_value.values.call_args.kwargs
+    assert kwargs["model_version"] == MODEL_VERSION
+    assert kwargs["intent"] == VALID_RESPONSE["intent"]
+    assert kwargs["summary_en"] == VALID_RESPONSE["summary_en"]
 
 
 @pytest.mark.asyncio
