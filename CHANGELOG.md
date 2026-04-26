@@ -26,6 +26,33 @@ No test files or CI workflow files were modified; the "Prune missing workspace m
 
 Verified locally and in CI: `ruff` clean, `mypy` "no issues found in 64 source files", `pytest -m "not real_ollama" -q` → 65 passed.
 
+## 2026-04-23 — Mobile Claude agent via Telegram bot
+
+Three PRs to wire the Telegram bot as a mobile prompting interface for telegram-brain data.
+
+### feat(bot): free-text DM handler with Claude + MCP agent ([#18](https://github.com/gokhanseckin/telegram-brain-claude/pull/18))
+`services/tg-bot/tbc_bot/agent.py` (new), `services/tg-bot/tbc_bot/handlers/chat.py` (new), `services/tg-bot/tbc_bot/main.py`, `services/tg-bot/pyproject.toml`
+
+DM the bot any free-text question from mobile → Claude (claude-sonnet-4-6) calls MCP tools via the Anthropic `mcp-client-2025-04-04` beta → reply sent back. Runs inside the existing `tbc-bot` process, no new service needed.
+
+- `agent.py`: `ask(history, text)` calls `AsyncAnthropic.beta.messages.create` with `mcp_servers` pointing at `TBC_MCP_PUBLIC_URL/mcp`, authenticated by `TBC_MCP_BEARER_TOKEN`.
+- `handlers/chat.py`: catch-all `F.text` handler (owner-gated). Per-chat in-memory history (last 10 turns). `/reset` clears it. Splits replies >4096 chars.
+- Chat router registered last so existing commands (`/brief`, `/status`, etc.) still take priority.
+
+### fix(mcp-server): mount /mcp as ASGI app instead of Route handler ([#19](https://github.com/gokhanseckin/telegram-brain-claude/pull/19))
+`services/mcp-server/tbc_mcp_server/main.py`
+
+`Route("/mcp", handle_mcp)` was calling `handle_mcp(request)` — wrong calling convention for an ASGI callable. Replaced with `Mount("/mcp", app=handle_mcp)`. This revealed a second routing issue (see #20).
+
+### fix(mcp-server): replace Mount routing with custom _Router for /mcp path ([#20](https://github.com/gokhanseckin/telegram-brain-claude/pull/20))
+`services/mcp-server/tbc_mcp_server/main.py`
+
+Starlette's `Mount("/mcp")` compiles regex `^/mcp/(?P<path>.*)$` — matches `/mcp/` but **not** `/mcp`. Anthropic's remote MCP connector sends `POST /mcp` (no trailing slash), so every request fell through to FastAPI → 404.
+
+Replaced with `Mount("") + _Router`. `Mount("")` passes the original full path to the child app without stripping. `_Router` checks `scope["path"]` directly: `/mcp` and `/mcp/*` → session manager, everything else → FastAPI.
+
+---
+
 ## 2026-04-23 — Initial backfill hardening
 
 Three changes to make the one-time onboarding backfill actually work end-to-end on first deploy. PRs landed in this order:
