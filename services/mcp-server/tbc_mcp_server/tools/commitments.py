@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import structlog
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 from tbc_common.db.models import Commitment
 
@@ -36,7 +36,7 @@ def get_commitments(
     if filters:
         stmt = stmt.where(and_(*filters))
 
-    stmt = stmt.order_by(desc(Commitment.due_at.nulls_last()), desc(Commitment.created_at))
+    stmt = stmt.order_by(Commitment.due_at.desc().nulls_last(), Commitment.created_at.desc())
 
     rows = db.execute(stmt).scalars().all()
 

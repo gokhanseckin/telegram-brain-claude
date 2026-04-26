@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import structlog
@@ -18,6 +19,38 @@ from .schema import UnderstandingOutput
 
 log = structlog.get_logger(__name__)
 
+def _extract_json_object(raw: str) -> str | None:
+    """Strip markdown fences and extract the first balanced JSON object."""
+    s = raw.strip()
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", s, re.DOTALL)
+    if fence:
+        s = fence.group(1).strip()
+    start = s.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return s[start : i + 1]
+    return None
+
 
 def _build_user_message(message: Message, context_messages: list[Message]) -> str:
     """Build the user-facing input string for the understanding prompt."""
@@ -30,6 +63,44 @@ def _build_user_message(message: Message, context_messages: list[Message]) -> st
     lines.append("=== Message to analyse ===")
     lines.append(message.text or "")
     return "\n".join(lines)
+
+
+async def _mark_parse_failed(
+    message: Message,
+    session: Session,
+    ollama: OllamaClient,
+    embedding_model: str,
+) -> None:
+    """Persist a minimal row so the message is not retried forever and queue advances.
+
+    Uses the current MODEL_VERSION (so the poll skips it) but leaves understanding
+    fields NULL. Identifiable later via `summary_en IS NULL AND embedding IS NOT NULL`.
+    """
+    embedding = await ollama.embed(model=embedding_model, input=message.text or "")
+    stmt = (
+        pg_insert(MessageUnderstanding)
+        .values(
+            chat_id=message.chat_id,
+            message_id=message.message_id,
+            model_version=MODEL_VERSION,
+            embedding=embedding,
+        )
+        .on_conflict_do_update(
+            index_elements=["chat_id", "message_id"],
+            set_={
+                "model_version": MODEL_VERSION,
+                "embedding": embedding,
+                "processed_at": text("now()"),
+            },
+        )
+    )
+    session.execute(stmt)
+    session.commit()
+    log.info(
+        "parse_failed_persisted",
+        chat_id=message.chat_id,
+        message_id=message.message_id,
+    )
 
 
 async def process_message(
@@ -69,16 +140,26 @@ async def process_message(
         user=user_input,
     )
 
-    # --- 3. Parse JSON ---
+    # --- 3. Parse JSON (tolerate markdown fences and surrounding prose) ---
+    parsed: dict[str, Any] | None = None
     try:
-        parsed: dict[str, Any] = json.loads(raw_content)
+        parsed = json.loads(raw_content)
     except json.JSONDecodeError:
+        extracted = _extract_json_object(raw_content)
+        if extracted is not None:
+            try:
+                parsed = json.loads(extracted)
+            except json.JSONDecodeError:
+                parsed = None
+
+    if parsed is None:
         log.warning(
             "malformed_json_from_ollama",
             chat_id=message.chat_id,
             message_id=message.message_id,
             raw=raw_content[:200],
         )
+        await _mark_parse_failed(message, session, ollama, embedding_model)
         return
 
     # --- 4. Validate against schema ---
@@ -91,6 +172,7 @@ async def process_message(
             message_id=message.message_id,
             error=str(exc),
         )
+        await _mark_parse_failed(message, session, ollama, embedding_model)
         return
 
     # --- 5. Embedding ---

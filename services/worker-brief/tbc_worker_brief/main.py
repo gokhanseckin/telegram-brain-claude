@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 import time
 from datetime import date
@@ -45,8 +44,11 @@ def check_trigger_file() -> None:
     """If /tmp/tbc_trigger_brief exists, run brief immediately and delete the file."""
     if os.path.exists(TRIGGER_FILE):
         log.info("trigger_file_detected", path=TRIGGER_FILE)
-        with contextlib.suppress(OSError):
+        try:
             os.remove(TRIGGER_FILE)
+        except OSError as e:
+            log.error("trigger_file_remove_failed", path=TRIGGER_FILE, error=str(e))
+            return
         try:
             run_brief()
         except Exception:

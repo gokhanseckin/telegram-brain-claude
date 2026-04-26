@@ -17,6 +17,16 @@ from tbc_common.db import Commitment, MessageUnderstanding
 
 logger = structlog.get_logger(__name__)
 
+_ALLOWED_OWNERS = {"user", "counterparty", "user_counterparty"}
+
+
+def _normalize_owner(raw: Any) -> str:
+    if isinstance(raw, str):
+        v = raw.strip().lower()
+        if v in _ALLOWED_OWNERS:
+            return v
+    return "counterparty"
+
 
 def extract_commitments(session: Session) -> int:
     """Find unprocessed commitment rows and create Commitment records.
@@ -46,7 +56,7 @@ def extract_commitments(session: Session) -> int:
             continue
 
         commitment_data: dict[str, Any] = mu.commitment or {}
-        owner = commitment_data.get("who", "counterparty")
+        owner = _normalize_owner(commitment_data.get("who"))
         description = commitment_data.get("what") or mu.summary_en or "(no description)"
 
         due_at: datetime | None = None
