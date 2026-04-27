@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -39,8 +40,12 @@ class Chat(Base):
     type: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text)
     username: Mapped[str | None] = mapped_column(Text)
-    tag: Mapped[str | None] = mapped_column(Text)  # client|prospect|colleague|personal|ignore|NULL
+    tag: Mapped[str | None] = mapped_column(Text)  # client|prospect|supplier|partner|internal|friend|family|personal|ignore|NULL
     tag_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tag_confidence: Mapped[float | None] = mapped_column(Float)
+    tag_source: Mapped[str | None] = mapped_column(Text)  # 'manual'|'auto_embedding'|'auto_llm'
+    tag_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    tag_reason: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     participant_count: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(

@@ -1,0 +1,1 @@
+"""Auto chat tagger worker."""

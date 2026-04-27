@@ -62,6 +62,23 @@ class Settings(BaseSettings):
         default="", validation_alias="TBC_MCP_PUBLIC_URL"
     )
 
+    # Chat auto-tagger
+    tagger_interval_seconds: int = Field(
+        default=3600, validation_alias="TBC_TAGGER_INTERVAL_SECONDS"
+    )
+    tagger_auto_threshold: float = Field(
+        default=0.78, validation_alias="TBC_TAGGER_AUTO_THRESHOLD"
+    )
+    tagger_margin: float = Field(
+        default=0.05, validation_alias="TBC_TAGGER_MARGIN"
+    )
+    tagger_min_messages: int = Field(
+        default=10, validation_alias="TBC_TAGGER_MIN_MESSAGES"
+    )
+    tagger_sample_size: int = Field(
+        default=50, validation_alias="TBC_TAGGER_SAMPLE_SIZE"
+    )
+
     # Logging
     log_level: str = Field(default="INFO", validation_alias="TBC_LOG_LEVEL")
 

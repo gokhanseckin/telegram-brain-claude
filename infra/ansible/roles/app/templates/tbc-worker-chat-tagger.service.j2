@@ -1,0 +1,20 @@
+[Unit]
+Description=TBC Worker — automatic chat role classification (embeddings + Ollama few-shot)
+After=network.target postgresql.service ollama.service
+Wants=postgresql.service ollama.service
+
+[Service]
+Type=simple
+User=tbc
+Group=tbc
+WorkingDirectory=/opt/tbc
+EnvironmentFile=/etc/tbc/env
+ExecStart=uv run python -m tbc_worker_chat_tagger.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tbc-worker-chat-tagger
+
+[Install]
+WantedBy=multi-user.target

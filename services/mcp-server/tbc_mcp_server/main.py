@@ -187,14 +187,14 @@ async def handle_list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_signals",
-            description="Query business signals detected in messages (buying intent, risk, etc.).",
+            description="Query signals detected in messages — business and personal.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "signal_types": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "e.g. buying, risk, expansion, competitor, referral, cooling",
+                        "description": "Business: buying, expansion, referral, partnership, supplier_issue, procurement, competitor, objection, pricing, timeline, decision_maker, cooling, risk, milestone. Personal: personal_event, emotional_support, celebration, favor_request, relationship_drift. Cross-cutting: commitment_made, commitment_received, other.",
                     },
                     "min_strength": {
                         "type": "integer",

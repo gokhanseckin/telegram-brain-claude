@@ -141,6 +141,15 @@
     mode: "0644"
   notify: Reload systemd
 
+- name: Write tbc-worker-chat-tagger.service
+  template:
+    src: tbc-worker-chat-tagger.service.j2
+    dest: /etc/systemd/system/tbc-worker-chat-tagger.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
 - name: Write tbc-bot.service
   template:
     src: tbc-bot.service.j2
@@ -175,6 +184,7 @@
     - tbc-worker-commitments.service
     - tbc-worker-brief.service
     - tbc-worker-weekly.service
+    - tbc-worker-chat-tagger.service
     - tbc-bot.service
     - tbc-mcp-server.service
 

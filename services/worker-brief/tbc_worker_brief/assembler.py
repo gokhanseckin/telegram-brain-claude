@@ -21,26 +21,49 @@ from tbc_common.db.models import (
 log = structlog.get_logger(__name__)
 
 SIGNAL_TAXONOMY = """\
-Signal taxonomy reference:
-- buying_signal: prospect showing purchase intent
-- expansion_signal: existing client showing upsell opportunity
-- referral_signal: client likely to refer others
-- cooling_signal: relationship going cold or disengaged
-- competitive_threat: competitor mentioned or activity noticed
+Signal taxonomy reference (interpret per chat tag — supplier_issue applies
+to chats tagged 'supplier', personal_event applies to friend/family/personal):
+
+Business signals:
+- buying: counterparty showing purchase intent (use for prospect/client tags)
+- expansion: existing client showing upsell opportunity
+- referral: counterparty likely to refer others
+- partnership: joint-venture or co-execution opening (partner tag)
+- supplier_issue: quality/timing/price problem from a supplier
+- procurement: user needs to buy something
+- competitor: competitor mentioned or active
 - objection: concern or blocker raised
-- milestone: important event or achievement mentioned
-- commitment_made: explicit promise or deadline
-- commitment_received: promise received from counterparty
+- pricing: pricing or budget tension
+- timeline: deadline or schedule shift
+- decision_maker: new stakeholder revealed
+- cooling: business relationship going quiet
+- risk: generic threat to a deal or working relationship
+- milestone: meaningful event or achievement
+
+Personal signals:
+- personal_event: birthday, illness, big life change
+- emotional_support: friend/family expressing distress or needing presence
+- celebration: good news worth acknowledging
+- favor_request: someone asked the user for help (non-business)
+- relationship_drift: friend/family contact has gone quiet
+
+Cross-cutting:
+- commitment_made: explicit promise the user made
+- commitment_received: promise the counterparty made to the user
+- other: notable but doesn't fit above
 """
 
 BRIEF_FORMAT_SPEC = """\
 Brief format spec:
-Output exactly five sections in order:
-1. 🎯 OPPORTUNITIES & RISKS — 3-7 items, each: signal sentence + action sentence + chat name
-2. ⏳ YOU OWE — missed replies and open user commitments, ranked by relationship value x age
-3. 📬 THEY OWE YOU — open counterparty commitments worth chasing
-4. 📊 PORTFOLIO MOVEMENT — cross-chat patterns, warming/cooling relationships
-5. 🧭 TODAY'S FOCUS — one paragraph, top three actions
+Output exactly six sections in order:
+1. 🌅 THE SHAPE OF TODAY — one short paragraph; honest tone of the day
+2. ✅ ON YOUR PLATE — others waiting on user; mix work + personal; rank by waiting-time x importance
+3. 🔔 WAITING ON OTHERS — user waiting on others; flag chase-worthy and say HOW to nudge
+4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat
+5. 🌡️ TEMPERATURE CHECK — warming/cooling relationships across both ledgers
+6. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
+Recency: items dated more than 30 days ago are background context, not action,
+unless something just changed. Discount urgency by age.
 Keep total length under 3000 characters to fit a single Telegram message.
 """
 
@@ -100,12 +123,13 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         if not mu.summary_en:
             continue
         chat_title = chat.title or f"chat_{chat.chat_id}"
+        tag_prefix = f"[{chat.tag}] " if chat.tag else ""
         directed = " [directed at you]" if mu.is_directed_at_user else ""
         signal_info = ""
         if mu.signal_type:
             signal_info = f" | signal: {mu.signal_type} (strength={mu.signal_strength})"
         lines.append(
-            f"- [{msg.sent_at.strftime('%H:%M')}] {chat_title}: {mu.summary_en}{directed}{signal_info}"
+            f"- [{msg.sent_at.strftime('%H:%M')}] {tag_prefix}{chat_title}: {mu.summary_en}{directed}{signal_info}"
         )
 
     if not any(line.startswith("- ") for line in lines):
@@ -167,7 +191,11 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
                 if m:
                     tag_match = f" {m.group(0)}"
             sev = f"[sev={alert.severity}]" if alert.severity else ""
-            lines.append(f"- {sev}{tag_match} [{alert.alert_type}] {alert.title or ''}: {alert.reasoning or ''}")
+            created = alert.created_at.strftime("%Y-%m-%d %H:%M") if alert.created_at else "?"
+            lines.append(
+                f"- [{created}] {sev}{tag_match} [{alert.alert_type}] "
+                f"{alert.title or ''}: {alert.reasoning or ''}"
+            )
     else:
         lines.append("(none)")
 
