@@ -44,6 +44,10 @@ async def cmd_ignore(message: Message) -> None:
             if chat:
                 chat.tag = "ignore"
                 chat.tag_set_at = now
+                chat.tag_source = "manual"
+                chat.tag_locked = True
+                chat.tag_confidence = None
+                chat.tag_reason = None
                 session.commit()
                 await message.answer(f"Marked '{chat.title}' as ignored.")
             else:

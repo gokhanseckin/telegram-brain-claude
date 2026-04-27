@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     tagger_sample_size: int = Field(
         default=50, validation_alias="TBC_TAGGER_SAMPLE_SIZE"
     )
+    tagger_max_per_run: int = Field(
+        default=200, validation_alias="TBC_TAGGER_MAX_PER_RUN"
+    )
 
     # Logging
     log_level: str = Field(default="INFO", validation_alias="TBC_LOG_LEVEL")

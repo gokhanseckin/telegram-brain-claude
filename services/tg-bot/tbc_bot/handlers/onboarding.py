@@ -34,7 +34,18 @@ log = structlog.get_logger(__name__)
 
 router = Router(name="onboarding")
 
-TAGS = ["client", "prospect", "colleague", "personal", "ignore", "skip"]
+TAGS = [
+    "client",
+    "prospect",
+    "supplier",
+    "partner",
+    "internal",
+    "friend",
+    "family",
+    "personal",
+    "ignore",
+    "skip",
+]
 
 
 class OnboardingState(StatesGroup):
@@ -171,6 +182,10 @@ async def on_tag_button(query: CallbackQuery, state: FSMContext) -> None:
             if chat:
                 chat.tag = chosen_tag
                 chat.tag_set_at = now
+                chat.tag_source = "manual"
+                chat.tag_locked = True
+                chat.tag_confidence = None
+                chat.tag_reason = None
             session.commit()
         await state.update_data(pending_tag=chosen_tag, pending_chat_id=chat_data["chat_id"])
         await query.answer(f"Tagged as {chosen_tag}.")
