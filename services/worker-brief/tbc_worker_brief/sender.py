@@ -59,8 +59,31 @@ def call_anthropic(cached_context: str, fresh_input: str) -> str:
     return cast(TextBlock, response.content[0]).text
 
 
+TELEGRAM_LIMIT = 4096
+TELEGRAM_CHUNK_BUDGET = 3900  # leave headroom for HTML entities
+
+
+def _chunk_for_telegram(text: str) -> list[str]:
+    """Split a long brief at line boundaries to fit Telegram's per-message limit."""
+    if len(text) <= TELEGRAM_LIMIT:
+        return [text]
+    chunks: list[str] = []
+    remaining = text
+    while len(remaining) > TELEGRAM_LIMIT:
+        cut = remaining.rfind("\n\n", 0, TELEGRAM_CHUNK_BUDGET)
+        if cut == -1:
+            cut = remaining.rfind("\n", 0, TELEGRAM_CHUNK_BUDGET)
+        if cut == -1:
+            cut = TELEGRAM_CHUNK_BUDGET
+        chunks.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:].lstrip()
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
 def post_to_telegram(text: str) -> None:
-    """Post brief text to Telegram via Bot API."""
+    """Post brief text to Telegram via Bot API. Chunks if over the 4096 limit."""
     bot_token = settings.tg_bot_token
     owner_id = settings.tg_owner_user_id
 
@@ -69,16 +92,26 @@ def post_to_telegram(text: str) -> None:
         return
 
     url = f"https://api.telegram.org/bot{bot_token.get_secret_value()}/sendMessage"
-    payload = {
-        "chat_id": owner_id,
-        "text": text,
-        "parse_mode": "HTML",
-    }
-
+    chunks = _chunk_for_telegram(text)
     with httpx.Client(timeout=30.0) as client:
-        response = client.post(url, json=payload)
-        response.raise_for_status()
-        log.info("brief_posted_to_telegram", status_code=response.status_code)
+        for i, chunk in enumerate(chunks):
+            payload = {
+                "chat_id": owner_id,
+                "text": chunk,
+                "parse_mode": "HTML",
+            }
+            response = client.post(url, json=payload)
+            if response.status_code != 200:
+                # Retry without HTML parse mode in case markup tripped Telegram.
+                payload.pop("parse_mode")
+                response = client.post(url, json=payload)
+            response.raise_for_status()
+            log.info(
+                "brief_posted_to_telegram",
+                status_code=response.status_code,
+                chunk=f"{i + 1}/{len(chunks)}",
+                length=len(chunk),
+            )
 
 
 def save_brief(session: Session, brief_text: str, today: date) -> None:
