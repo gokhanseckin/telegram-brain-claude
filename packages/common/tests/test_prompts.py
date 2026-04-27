@@ -40,10 +40,11 @@ def test_understanding_prompt_has_schema() -> None:
 
 def test_brief_prompt_has_sections() -> None:
     for section in [
-        "OPPORTUNITIES & RISKS",
-        "YOU OWE",
-        "THEY OWE YOU",
-        "PORTFOLIO MOVEMENT",
-        "TODAY'S FOCUS",
+        "THE SHAPE OF TODAY",
+        "ON YOUR PLATE",
+        "WAITING ON OTHERS",
+        "WORTH NOTICING",
+        "TEMPERATURE CHECK",
+        "IF YOU ONLY DO THREE THINGS",
     ]:
         assert section in BRIEF_SYSTEM
