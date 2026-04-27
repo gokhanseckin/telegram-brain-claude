@@ -68,7 +68,7 @@ async def handle_list_tools() -> list[Tool]:
                     "tags": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Filter by chat tags (client, prospect, colleague, personal)",
+                        "description": "Filter by chat tags (client, prospect, supplier, partner, internal, friend, family, personal)",
                     },
                     "date_from": {"type": "string", "format": "date", "description": "Start date (YYYY-MM-DD)"},
                     "date_to": {"type": "string", "format": "date", "description": "End date (YYYY-MM-DD)"},
@@ -131,7 +131,7 @@ async def handle_list_tools() -> list[Tool]:
                 "properties": {
                     "tag": {
                         "type": "string",
-                        "description": "Filter by tag (client, prospect, colleague, personal)",
+                        "description": "Filter by tag (client, prospect, supplier, partner, internal, friend, family, personal)",
                     },
                     "include_untagged": {
                         "type": "boolean",

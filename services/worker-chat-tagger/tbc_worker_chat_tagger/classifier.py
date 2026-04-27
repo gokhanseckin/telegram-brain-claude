@@ -265,45 +265,70 @@ def _write_decision(session: Session, chat: Chat, decision: TagDecision) -> None
 
 
 def run_once(session: Session) -> dict[str, int]:
-    """One sweep over all eligible chats. Returns counters."""
+    """One sweep over all eligible chats. Returns counters.
+
+    Emits a progress log every 25 chats so a long sweep (potentially hours
+    on Stage B) is observable in journalctl.
+    """
+    import time as _time
+
     counters = {"considered": 0, "skipped_few_msgs": 0, "tagged_a": 0, "tagged_b": 0, "skipped": 0}
     tag_centroids = build_tag_centroids(session, settings.tagger_sample_size)
-    for chat in candidate_chats(session):
+    candidates = candidate_chats(session)
+    total = len(candidates)
+    log.info("tagger_run_starting", total=total, centroid_tags=[tc.tag for tc in tag_centroids])
+
+    started = _time.monotonic()
+    PROGRESS_EVERY = 25
+
+    for i, chat in enumerate(candidates, start=1):
         counters["considered"] += 1
         if not _has_min_messages(session, chat.chat_id, settings.tagger_min_messages):
             counters["skipped_few_msgs"] += 1
-            continue
-
-        decision = _classify_with_embeddings(session, chat, tag_centroids)
-        if decision is not None:
-            _write_decision(session, chat, decision)
-            counters["tagged_a"] += 1
-            log.info(
-                "chat_tagged_embedding",
-                chat_id=chat.chat_id,
-                tag=decision.tag,
-                confidence=decision.confidence,
-            )
-            continue
-
-        # Stage B: LLM fallback
-        try:
-            decision = asyncio.run(_classify_with_llm(session, chat))
-        except Exception:
-            log.exception("llm_classification_failed", chat_id=chat.chat_id)
-            decision = None
-
-        if decision is not None:
-            _write_decision(session, chat, decision)
-            counters["tagged_b"] += 1
-            log.info(
-                "chat_tagged_llm",
-                chat_id=chat.chat_id,
-                tag=decision.tag,
-                confidence=decision.confidence,
-                reason=decision.reason,
-            )
         else:
-            counters["skipped"] += 1
+            decision = _classify_with_embeddings(session, chat, tag_centroids)
+            if decision is not None:
+                _write_decision(session, chat, decision)
+                counters["tagged_a"] += 1
+                log.info(
+                    "chat_tagged_embedding",
+                    chat_id=chat.chat_id,
+                    tag=decision.tag,
+                    confidence=decision.confidence,
+                )
+            else:
+                # Stage B: LLM fallback
+                try:
+                    decision = asyncio.run(_classify_with_llm(session, chat))
+                except Exception:
+                    log.exception("llm_classification_failed", chat_id=chat.chat_id)
+                    decision = None
+
+                if decision is not None:
+                    _write_decision(session, chat, decision)
+                    counters["tagged_b"] += 1
+                    log.info(
+                        "chat_tagged_llm",
+                        chat_id=chat.chat_id,
+                        tag=decision.tag,
+                        confidence=decision.confidence,
+                        reason=decision.reason,
+                    )
+                else:
+                    counters["skipped"] += 1
+
+        if i % PROGRESS_EVERY == 0 or i == total:
+            elapsed = _time.monotonic() - started
+            rate = i / elapsed if elapsed > 0 else 0.0
+            remaining = (total - i) / rate if rate > 0 else 0.0
+            log.info(
+                "tagger_progress",
+                done=i,
+                total=total,
+                rate_per_sec=round(rate, 3),
+                eta_seconds=int(remaining),
+                **counters,
+            )
+
     log.info("tagger_run_done", **counters)
     return counters
