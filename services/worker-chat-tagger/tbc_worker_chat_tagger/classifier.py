@@ -13,7 +13,7 @@ import structlog
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from tbc_common.config import settings
-from tbc_common.db.models import Chat, Message, MessageUnderstanding
+from tbc_common.db.models import Chat, Message
 
 from tbc_worker_chat_tagger.centroids import (
     ClassificationResult,
@@ -220,10 +220,19 @@ def candidate_chats(session: Session) -> list[Chat]:
 
 
 def _has_min_messages(session: Session, chat_id: int, floor: int) -> bool:
+    """A chat is taggable if it has enough raw text messages.
+
+    We count raw messages (not embeddings) so that Stage B (Ollama on raw
+    text) can classify chats that have never been embedded. Stage A will
+    naturally return None when embeddings are absent and we'll fall
+    through to Stage B in the orchestration above.
+    """
     n = session.execute(
-        select(MessageUnderstanding.message_id)
-        .where(MessageUnderstanding.chat_id == chat_id)
-        .where(MessageUnderstanding.embedding.isnot(None))
+        select(Message.message_id)
+        .where(Message.chat_id == chat_id)
+        .where(Message.text.isnot(None))
+        .where(Message.text != "")
+        .where(Message.deleted_at.is_(None))
         .limit(floor)
     ).all()
     return len(n) >= floor
