@@ -62,8 +62,19 @@ Output exactly six sections in order:
 4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat
 5. 🌡️ TEMPERATURE CHECK — warming/cooling relationships across both ledgers
 6. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
-Recency: items dated more than 30 days ago are background context, not action,
-unless something just changed. Discount urgency by age.
+Recency rules (strict):
+- The fresh input begins with "Today is YYYY-MM-DD". Anchor every claim
+  against that date. Never imply something is "now" or "today" if its
+  timestamp is from a previous day.
+- When you reference an item, mention its age explicitly if it is more
+  than 24 hours old: "from 3 days ago", "set 2 weeks back".
+- Items >7 days old must be qualified ("from last week", "still open
+  from earlier this month") — never written as if they just happened.
+- Items >30 days old are background context only, not action items,
+  unless the data shows something just changed (a new message in the
+  last 24h).
+- Items >90 days old are pre-filtered out of the input. If you somehow
+  see one, treat it as historical reference, never as today's work.
 Keep total length under 3000 characters to fit a single Telegram message.
 """
 
@@ -98,6 +109,15 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
 
     lines: list[str] = []
 
+    # --- Anchor: today's date is the FIRST thing the LLM sees, so every
+    # `age=Nd` and `created_at` below is interpretable against it. ---
+    lines.append(f"## Today is {today.isoformat()} ({now.strftime('%A')}). Now: {now.strftime('%Y-%m-%d %H:%M UTC')}.")
+    lines.append(
+        "All timestamps below are real wall-clock times. Frame urgency "
+        "against `Now` — a timestamp from yesterday is yesterday, not today."
+    )
+    lines.append("")
+
     # --- Last 24h message understandings (non-ignored chats) ---
     lines.append("## Recent Message Intelligence (last 24h)")
 
@@ -128,8 +148,14 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         signal_info = ""
         if mu.signal_type:
             signal_info = f" | signal: {mu.signal_type} (strength={mu.signal_strength})"
+        # Full timestamp so the LLM never has to guess which day a message
+        # is from. Add a hours-ago hint for fast scanning.
+        sent = msg.sent_at if msg.sent_at.tzinfo else msg.sent_at.replace(tzinfo=UTC)
+        hours_ago = int((now - sent).total_seconds() // 3600)
+        ago_hint = f" ({hours_ago}h ago)" if hours_ago > 0 else " (just now)"
         lines.append(
-            f"- [{msg.sent_at.strftime('%H:%M')}] {tag_prefix}{chat_title}: {mu.summary_en}{directed}{signal_info}"
+            f"- [{sent.strftime('%Y-%m-%d %H:%M')}{ago_hint}] {tag_prefix}{chat_title}: "
+            f"{mu.summary_en}{directed}{signal_info}"
         )
 
     if not any(line.startswith("- ") for line in lines):
@@ -139,19 +165,27 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
     lines.append("")
     lines.append("## Open Commitments")
 
+    ninety_days_ago = now - timedelta(days=90)
+
+    def _render_commit(c: Commitment) -> str:
+        c_created = c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=UTC)
+        age_days = (now - c_created).days
+        created_label = c_created.strftime("%Y-%m-%d")
+        due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else " (no due date)"
+        return f"- [created {created_label}, age={age_days}d]{due} {c.description}"
+
     user_commits = session.execute(
         select(Commitment)
         .where(Commitment.status == "open")
         .where(Commitment.owner == "user")
+        .where(Commitment.created_at >= ninety_days_ago)
         .order_by(Commitment.created_at)
     ).scalars().all()
 
     if user_commits:
         lines.append("### You owe:")
         for c in user_commits:
-            due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else ""
-            age_days = (now - c.created_at.replace(tzinfo=UTC if c.created_at.tzinfo is None else c.created_at.tzinfo)).days
-            lines.append(f"- [age={age_days}d]{due} {c.description}")
+            lines.append(_render_commit(c))
     else:
         lines.append("### You owe: (none)")
 
@@ -159,15 +193,14 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         select(Commitment)
         .where(Commitment.status == "open")
         .where(Commitment.owner == "counterparty")
+        .where(Commitment.created_at >= ninety_days_ago)
         .order_by(Commitment.created_at)
     ).scalars().all()
 
     if cp_commits:
         lines.append("### They owe you:")
         for c in cp_commits:
-            due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else ""
-            age_days = (now - c.created_at.replace(tzinfo=UTC if c.created_at.tzinfo is None else c.created_at.tzinfo)).days
-            lines.append(f"- [age={age_days}d]{due} {c.description}")
+            lines.append(_render_commit(c))
     else:
         lines.append("### They owe you: (none)")
 
@@ -236,8 +269,5 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
             lines.append(f"- [{fb.brief_date}] {fb.feedback}{note} (ref: {fb.item_ref or 'n/a'})")
     else:
         lines.append("(no feedback yet)")
-
-    lines.append("")
-    lines.append(f"Today's date: {today.isoformat()}")
 
     return "\n".join(lines), alert_ids
