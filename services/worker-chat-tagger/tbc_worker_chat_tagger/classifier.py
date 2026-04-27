@@ -274,9 +274,17 @@ def run_once(session: Session) -> dict[str, int]:
 
     counters = {"considered": 0, "skipped_few_msgs": 0, "tagged_a": 0, "tagged_b": 0, "skipped": 0}
     tag_centroids = build_tag_centroids(session, settings.tagger_sample_size)
-    candidates = candidate_chats(session)
+    all_candidates = candidate_chats(session)
+    cap = settings.tagger_max_per_run
+    candidates = all_candidates[:cap] if cap > 0 else all_candidates
     total = len(candidates)
-    log.info("tagger_run_starting", total=total, centroid_tags=[tc.tag for tc in tag_centroids])
+    log.info(
+        "tagger_run_starting",
+        total=total,
+        candidates_pending=len(all_candidates),
+        cap=cap,
+        centroid_tags=[tc.tag for tc in tag_centroids],
+    )
 
     started = _time.monotonic()
     PROGRESS_EVERY = 25
