@@ -1,11 +1,15 @@
-"""One-shot CLI to bulk-generate bge-m3 embeddings for tagged chats.
+"""One-shot CLI to bulk-generate bge-m3 embeddings for non-ignored chats.
 
-Unlocks semantic_search / RAG Q&A without waiting on the Qwen understanding
-pass. Upserts partial rows into message_understanding with embedding +
-model_version="embeddings-only-<date>", leaving Qwen-derived fields NULL. The
-regular worker-understanding poll loop later overwrites these with full
-understanding (its LEFT JOIN filters on the current MODEL_VERSION, so these
-rows still look pending to it).
+Unlocks semantic_search / RAG Q&A AND the chat auto-tagger's Stage A
+(embedding-centroid) without waiting on the Qwen understanding pass.
+Embeds every chat not explicitly tagged 'ignore' — including untagged
+chats — so the tagger has vectors to classify against.
+
+Upserts partial rows into message_understanding with embedding +
+model_version="embeddings-only-<date>", leaving Qwen-derived fields NULL.
+The regular worker-understanding poll loop later overwrites these with
+full understanding for chats that are tagged (its LEFT JOIN filters on
+MODEL_VERSION, so these rows still look pending to it).
 
 Usage:
     python -m tbc_worker_understanding.bulk_embed [--batch-size 128] [--limit N] [--dry-run]
@@ -46,9 +50,8 @@ _CANDIDATE_SQL = text("""
       AND m.text IS NOT NULL
       AND m.text != ''
       AND (mu.chat_id IS NULL OR mu.embedding IS NULL)
-      AND m.chat_id IN (
-          SELECT chat_id FROM chats
-          WHERE tag IS NOT NULL AND tag != 'ignore'
+      AND m.chat_id NOT IN (
+          SELECT chat_id FROM chats WHERE tag = 'ignore'
       )
     ORDER BY m.sent_at ASC
     LIMIT :batch_size
@@ -64,9 +67,8 @@ _COUNT_SQL = text("""
       AND m.text IS NOT NULL
       AND m.text != ''
       AND (mu.chat_id IS NULL OR mu.embedding IS NULL)
-      AND m.chat_id IN (
-          SELECT chat_id FROM chats
-          WHERE tag IS NOT NULL AND tag != 'ignore'
+      AND m.chat_id NOT IN (
+          SELECT chat_id FROM chats WHERE tag = 'ignore'
       )
 """)
 
