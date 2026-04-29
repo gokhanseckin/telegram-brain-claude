@@ -25,7 +25,13 @@ from tbc_common.logging import configure_logging
 from .auth import BearerTokenMiddleware
 from .tools.brief import get_recent_brief
 from .tools.chat import get_chat_history, get_chat_summary, list_chats
-from .tools.commitments import get_commitments
+from .tools.commitments import (
+    CommitmentNotFound,
+    cancel_commitment,
+    get_commitments,
+    resolve_commitment,
+    update_commitment,
+)
 from .tools.relationship import get_relationship_state
 from .tools.search import search_messages, semantic_search
 from .tools.signals import get_signals
@@ -164,13 +170,19 @@ async def handle_list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_commitments",
-            description="Query tracked commitments (promises made or received).",
+            description=(
+                "Query tracked commitments (promises made or received). "
+                "Use the `query` field for natural-language matching when the "
+                "user mentions a commitment by topic ('the report', '67.05', "
+                "'Bob') — the user has hundreds of open commitments, do not "
+                "load them all."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "status": {
                         "type": "string",
-                        "enum": ["open", "fulfilled", "stale", "dismissed"],
+                        "enum": ["open", "done", "cancelled", "stale"],
                     },
                     "owner": {
                         "type": "string",
@@ -182,7 +194,91 @@ async def handle_list_tools() -> list[Tool]:
                         "default": False,
                         "description": "Only return overdue open commitments",
                     },
+                    "query": {
+                        "type": "string",
+                        "description": "Case-insensitive substring match on description",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Max rows returned (default 50)",
+                    },
                 },
+            },
+        ),
+        Tool(
+            name="resolve_commitment",
+            description=(
+                "Mark a commitment as DONE. Use when the user says they've "
+                "completed something (e.g. 'I sent the report', 'paid Gizem'). "
+                "ALWAYS find the commitment via get_commitments(query=...) first "
+                "and confirm the right id; if there's ambiguity, list the "
+                "candidates back to the user before calling this. Sets "
+                "status='done' and records the note + the user's message id "
+                "for audit."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "commitment_id": {
+                        "type": "integer",
+                        "description": "Exact commitment.id to close",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "User's resolution wording, e.g. 'sent the report today'",
+                    },
+                    "resolved_by_message_id": {
+                        "type": "integer",
+                        "description": "Telegram message id that triggered the resolution (optional)",
+                    },
+                },
+                "required": ["commitment_id"],
+            },
+        ),
+        Tool(
+            name="cancel_commitment",
+            description=(
+                "Mark a commitment as CANCELLED — no longer relevant, not done. "
+                "Use when the user explicitly says to drop it ('forget that', "
+                "'no longer needed', 'overcome by events'). Find via "
+                "get_commitments first; never guess."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "commitment_id": {"type": "integer"},
+                    "reason": {
+                        "type": "string",
+                        "description": "Why it was cancelled, for audit",
+                    },
+                },
+                "required": ["commitment_id"],
+            },
+        ),
+        Tool(
+            name="update_commitment",
+            description=(
+                "Adjust an open commitment without closing it. Use to set or "
+                "push a due date ('move to next Friday') or to append a "
+                "status note ('waiting on Bob's reply'). Either due_at or "
+                "note_append must be provided."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "commitment_id": {"type": "integer"},
+                    "due_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "ISO 8601 UTC timestamp for the new due date",
+                    },
+                    "note_append": {
+                        "type": "string",
+                        "description": "Free-text note to append to the description",
+                    },
+                },
+                "required": ["commitment_id"],
             },
         ),
         Tool(
@@ -312,8 +408,48 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
             owner=args.get("owner"),
             chat_id=args.get("chat_id"),
             overdue_only=args.get("overdue_only", False),
+            query=args.get("query"),
+            limit=args.get("limit", 50),
         )
         return [r.model_dump() for r in commitments]
+
+    elif name == "resolve_commitment":
+        try:
+            result = resolve_commitment(
+                db,
+                commitment_id=args["commitment_id"],
+                note=args.get("note"),
+                resolved_by_message_id=args.get("resolved_by_message_id"),
+            )
+        except CommitmentNotFound as exc:
+            return {"error": str(exc)}
+        return result.model_dump()
+
+    elif name == "cancel_commitment":
+        try:
+            result = cancel_commitment(
+                db,
+                commitment_id=args["commitment_id"],
+                reason=args.get("reason"),
+            )
+        except CommitmentNotFound as exc:
+            return {"error": str(exc)}
+        return result.model_dump()
+
+    elif name == "update_commitment":
+        due_at = (
+            datetime.fromisoformat(args["due_at"]) if args.get("due_at") else None
+        )
+        try:
+            result = update_commitment(
+                db,
+                commitment_id=args["commitment_id"],
+                due_at=due_at,
+                note_append=args.get("note_append"),
+            )
+        except (CommitmentNotFound, ValueError) as exc:
+            return {"error": str(exc)}
+        return result.model_dump()
 
     elif name == "get_signals":
         date_from = date.fromisoformat(args["date_from"]) if args.get("date_from") else None

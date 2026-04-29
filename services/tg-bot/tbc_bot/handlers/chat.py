@@ -50,8 +50,12 @@ async def handle_text(message: Message) -> None:
 
     history = _history[chat_id]
 
+    # Surface the Telegram message id to the agent so commitment resolutions
+    # can be traced back to the exact DM that triggered them.
+    user_text = f"{message.text}\n\n[meta] current_message_id={message.message_id}"
+
     try:
-        reply = await ask(history, message.text)
+        reply = await ask(history, user_text)
     except Exception:
         log.exception("agent_error", chat_id=chat_id)
         await message.answer("Something went wrong, please try again.")
