@@ -61,7 +61,7 @@ Output exactly six sections in order:
 1. 🌅 THE SHAPE OF TODAY — one short paragraph; honest tone of the day
 2. ✅ ON YOUR PLATE — others waiting on user; mix work + personal; rank by waiting-time x importance
 3. 🔔 WAITING ON OTHERS — user waiting on others; flag chase-worthy and say HOW to nudge
-4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat
+4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat. CRITICAL: when the underlying input row carries a `ref=#xxxx` tag (radar alerts), include that tag inline at the END of the bullet so the user can reply with `/feedback #xxxx not_useful "..."`. Format: `• [chat / tag] — <observation>. <suggested response>. (#xxxx)`. Items synthesized from raw 24h messages without a ref tag get no parenthetical.
 5. 🌡️ TEMPERATURE CHECK — warming/cooling relationships across both ledgers
 6. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
 Recency rules (strict):
@@ -240,20 +240,21 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
     if alerts:
         for alert in alerts:
             alert_ids.append(alert.id)
-            tag_match = ""
+            # Surface the alert's #xxxx ref tag prominently — the brief writer
+            # MUST carry it through to the output so the user can later DM
+            # /feedback #xxxx to rate the item.
+            ref_tag = ""
             if alert.reasoning:
                 m = re.search(r"#\w+", alert.reasoning)
                 if m:
-                    tag_match = f" {m.group(0)}"
+                    ref_tag = m.group(0)
             sev = f"[sev={alert.severity}]" if alert.severity else ""
-            # Show the underlying conversation date so the LLM doesn't read a
-            # backfilled alert as fresh news.
             anchor = alert.source_sent_at or alert.created_at
             anchor_label = anchor.strftime("%Y-%m-%d %H:%M") if anchor else "?"
             anchor_kind = "source" if alert.source_sent_at else "extracted"
             lines.append(
-                f"- [{anchor_kind} {anchor_label}] {sev}{tag_match} [{alert.alert_type}] "
-                f"{alert.title or ''}: {alert.reasoning or ''}"
+                f"- ref={ref_tag} [{anchor_kind} {anchor_label}] {sev} "
+                f"[{alert.alert_type}] {alert.title or ''}: {alert.reasoning or ''}"
             )
     else:
         lines.append("(none)")
