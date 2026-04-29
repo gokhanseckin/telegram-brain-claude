@@ -6,7 +6,7 @@ import asyncio
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import structlog
@@ -209,12 +209,72 @@ def _classify_pure(
 
 # --- Top-level orchestration ---
 
+_INVOLVEMENT_DAYS = 180
+"""Match the ingestion backfill window. Older messages aren't in the DB anyway."""
+
+
 def candidate_chats(session: Session) -> list[Chat]:
-    """Chats eligible for auto-tagging this run."""
+    """Chats eligible for auto-tagging this run.
+
+    Strict rule: only tag chats where the owner has direct involvement
+    within the ingestion window (last 180 days). Involvement means:
+      - The owner sent at least one message in the chat, OR
+      - The owner was mentioned by @username, OR
+      - Someone replied to a message the owner sent.
+
+    Anything else (silent group memberships, broadcast feeds, accidental
+    invites, bot pings) is left untagged. A 96%-noise filter on the
+    candidate pool — see audit on 2026-04-29.
+    """
+    if settings.tg_owner_user_id is None or not settings.tg_owner_username:
+        log.warning(
+            "tagger_owner_unset",
+            note="tg_owner_user_id and tg_owner_username must be set; skipping run",
+        )
+        return []
+
+    cutoff = datetime.now(UTC) - timedelta(days=_INVOLVEMENT_DAYS)
+    owner_id = settings.tg_owner_user_id
+    mention_pattern = f"%@{settings.tg_owner_username}%"
+
+    # Chat ids where owner sent something within the window.
+    sent = (
+        select(Message.chat_id)
+        .where(Message.sender_id == owner_id)
+        .where(Message.sent_at >= cutoff)
+        .where(Message.deleted_at.is_(None))
+    )
+
+    # Chat ids where owner was @-mentioned in text within the window.
+    mentioned = (
+        select(Message.chat_id)
+        .where(Message.text.ilike(mention_pattern))
+        .where(Message.sent_at >= cutoff)
+        .where(Message.deleted_at.is_(None))
+    )
+
+    # Chat ids where someone replied to a message the owner sent (chat_id +
+    # message_id scoped — Telegram message ids reset per chat).
+    parent = Message.__table__.alias("parent")
+    replied = (
+        select(Message.chat_id)
+        .join(
+            parent,
+            (parent.c.chat_id == Message.chat_id)
+            & (parent.c.message_id == Message.reply_to_id),
+        )
+        .where(parent.c.sender_id == owner_id)
+        .where(Message.sent_at >= cutoff)
+        .where(Message.deleted_at.is_(None))
+    )
+
+    involved = sent.union(mentioned, replied).subquery()
+
     rows = session.execute(
         select(Chat)
         .where(Chat.tag_locked.is_(False))
         .where(Chat.tag.is_(None))
+        .where(Chat.chat_id.in_(select(involved)))
     ).scalars().all()
     return list(rows)
 

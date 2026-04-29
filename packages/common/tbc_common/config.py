@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # Telegram bot
     tg_bot_token: SecretStr | None = Field(default=None, validation_alias="TBC_TG_BOT_TOKEN")
     tg_owner_user_id: int | None = Field(default=None, validation_alias="TBC_TG_OWNER_USER_ID")
+    # Telegram @username of the owner (without the @). Used by the auto-tagger
+    # to detect mentions of the user in messages from others, so chats where
+    # the owner has no involvement at all can be skipped.
+    tg_owner_username: str | None = Field(
+        default="gokhanseckin", validation_alias="TBC_TG_OWNER_USERNAME"
+    )
 
     # Brief scheduling
     brief_tz: str = Field(default="Europe/Istanbul", validation_alias="TBC_BRIEF_TZ")
