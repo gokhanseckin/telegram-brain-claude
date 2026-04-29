@@ -279,25 +279,6 @@ def candidate_chats(session: Session) -> list[Chat]:
     return list(rows)
 
 
-def _has_min_messages(session: Session, chat_id: int, floor: int) -> bool:
-    """A chat is taggable if it has enough raw text messages.
-
-    We count raw messages (not embeddings) so that Stage B (Ollama on raw
-    text) can classify chats that have never been embedded. Stage A will
-    naturally return None when embeddings are absent and we'll fall
-    through to Stage B in the orchestration above.
-    """
-    n = session.execute(
-        select(Message.message_id)
-        .where(Message.chat_id == chat_id)
-        .where(Message.text.isnot(None))
-        .where(Message.text != "")
-        .where(Message.deleted_at.is_(None))
-        .limit(floor)
-    ).all()
-    return len(n) >= floor
-
-
 def _write_decision(session: Session, chat: Chat, decision: TagDecision) -> None:
     session.execute(
         text(
@@ -332,7 +313,7 @@ def run_once(session: Session) -> dict[str, int]:
     """
     import time as _time
 
-    counters = {"considered": 0, "skipped_few_msgs": 0, "tagged_a": 0, "tagged_b": 0, "skipped": 0}
+    counters = {"considered": 0, "tagged_a": 0, "tagged_b": 0, "skipped": 0}
     tag_centroids = build_tag_centroids(session, settings.tagger_sample_size)
     all_candidates = candidate_chats(session)
     cap = settings.tagger_max_per_run
@@ -351,39 +332,39 @@ def run_once(session: Session) -> dict[str, int]:
 
     for i, chat in enumerate(candidates, start=1):
         counters["considered"] += 1
-        if not _has_min_messages(session, chat.chat_id, settings.tagger_min_messages):
-            counters["skipped_few_msgs"] += 1
+        # No message-count floor: candidate_chats already required owner
+        # involvement (sent / mentioned / replied-to). If the owner has
+        # touched a chat at all, it's worth a tag — even at 1 message.
+        decision = _classify_with_embeddings(session, chat, tag_centroids)
+        if decision is not None:
+            _write_decision(session, chat, decision)
+            counters["tagged_a"] += 1
+            log.info(
+                "chat_tagged_embedding",
+                chat_id=chat.chat_id,
+                tag=decision.tag,
+                confidence=decision.confidence,
+            )
         else:
-            decision = _classify_with_embeddings(session, chat, tag_centroids)
+            # Stage B: LLM fallback (handles small / unembedded chats)
+            try:
+                decision = asyncio.run(_classify_with_llm(session, chat))
+            except Exception:
+                log.exception("llm_classification_failed", chat_id=chat.chat_id)
+                decision = None
+
             if decision is not None:
                 _write_decision(session, chat, decision)
-                counters["tagged_a"] += 1
+                counters["tagged_b"] += 1
                 log.info(
-                    "chat_tagged_embedding",
+                    "chat_tagged_llm",
                     chat_id=chat.chat_id,
                     tag=decision.tag,
                     confidence=decision.confidence,
+                    reason=decision.reason,
                 )
             else:
-                # Stage B: LLM fallback
-                try:
-                    decision = asyncio.run(_classify_with_llm(session, chat))
-                except Exception:
-                    log.exception("llm_classification_failed", chat_id=chat.chat_id)
-                    decision = None
-
-                if decision is not None:
-                    _write_decision(session, chat, decision)
-                    counters["tagged_b"] += 1
-                    log.info(
-                        "chat_tagged_llm",
-                        chat_id=chat.chat_id,
-                        tag=decision.tag,
-                        confidence=decision.confidence,
-                        reason=decision.reason,
-                    )
-                else:
-                    counters["skipped"] += 1
+                counters["skipped"] += 1
 
         if i % PROGRESS_EVERY == 0 or i == total:
             elapsed = _time.monotonic() - started
