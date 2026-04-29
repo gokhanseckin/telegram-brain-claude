@@ -1,0 +1,45 @@
+# Run locally: `uv run pre-commit install` once, then hooks fire on every `git commit`.
+# Run on whole repo any time: `uv run pre-commit run --all-files`.
+#
+# These hooks catch the common foot-guns: secret leaks, accidentally-committed
+# session files, oversized blobs, broken YAML, leftover merge-conflict markers.
+# Logic checks (ruff, mypy) stay in CI to keep commit-time fast.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key                # PEM / RSA / OpenSSH
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]                # 1 MB cap; bypass with --no-verify if intentional
+      - id: check-merge-conflict
+      - id: check-yaml
+        exclude: '^infra/ansible/.*\.yml$'    # Ansible YAML uses Jinja2 + custom tags
+      - id: check-toml
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"] # preserve markdown's two-trailing-spaces line break
+      - id: check-case-conflict
+      - id: forbid-new-submodules
+
+  # detect-secrets: catches API keys, tokens, high-entropy strings.
+  # Baseline (`.secrets.baseline`) records currently-known placeholders so
+  # they don't trip the hook. Refresh after adding new known-fake examples:
+  #   uv run detect-secrets scan --baseline .secrets.baseline
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: '^(uv\.lock|.*\.session|.*\.session-journal)$'
+
+  # Belt-and-braces: refuse to commit Telethon session files even if a future
+  # .gitignore change forgets to cover them. Matches by filename, not contents.
+  - repo: local
+    hooks:
+      - id: forbid-session-files
+        name: forbid Telethon session files
+        entry: "Telethon session file must never be committed"
+        language: fail
+        files: '\.session(-journal)?$'

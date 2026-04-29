@@ -64,4 +64,3 @@
   environment:
     OLLAMA_HOST: "http://127.0.0.1:11434"
   timeout: 1800   # 30 min
-
