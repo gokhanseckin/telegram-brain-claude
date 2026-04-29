@@ -222,9 +222,17 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
     lines.append("")
     lines.append("## Radar Alerts (last 24h)")
 
+    # Filter on the underlying conversation's freshness, not the alert row's
+    # created_at — the radar worker may have just minted an alert from a
+    # months-old understanding. Fall back to created_at only for legacy rows
+    # whose source_sent_at hasn't been backfilled.
+    alert_recent_filter = sa_or(
+        RadarAlert.source_sent_at >= yesterday,
+        sa_and(RadarAlert.source_sent_at.is_(None), RadarAlert.created_at >= yesterday),
+    )
     alerts = session.execute(
         select(RadarAlert)
-        .where(RadarAlert.created_at >= yesterday)
+        .where(alert_recent_filter)
         .order_by(RadarAlert.severity.desc())
     ).scalars().all()
 
@@ -238,9 +246,13 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
                 if m:
                     tag_match = f" {m.group(0)}"
             sev = f"[sev={alert.severity}]" if alert.severity else ""
-            created = alert.created_at.strftime("%Y-%m-%d %H:%M") if alert.created_at else "?"
+            # Show the underlying conversation date so the LLM doesn't read a
+            # backfilled alert as fresh news.
+            anchor = alert.source_sent_at or alert.created_at
+            anchor_label = anchor.strftime("%Y-%m-%d %H:%M") if anchor else "?"
+            anchor_kind = "source" if alert.source_sent_at else "extracted"
             lines.append(
-                f"- [{created}] {sev}{tag_match} [{alert.alert_type}] "
+                f"- [{anchor_kind} {anchor_label}] {sev}{tag_match} [{alert.alert_type}] "
                 f"{alert.title or ''}: {alert.reasoning or ''}"
             )
     else:
