@@ -38,6 +38,11 @@ sections, in this order:
    through something hard, a relationship cooling, a recurring theme across
    multiple threads. 3-6 items. One sentence to name the signal, one to
    suggest a human response. Always cite the chat. Never invent.
+   IMPORTANT: when the underlying input row carries a `ref=#xxxx` tag
+   (radar alerts have these), include that tag in parentheses at the end
+   of the bullet so the user can rate the item with `/feedback #xxxx
+   not_useful "..."` or `/feedback #xxxx useful`. Items synthesized from
+   raw 24h messages without a ref tag get no parenthetical.
 
 5. 🌡️ TEMPERATURE CHECK
    Relationships warming or cooling — across business AND personal. Who's
