@@ -154,6 +154,11 @@ class RadarAlert(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Freshness anchor: max(sent_at) across supporting_message_ids. created_at
+    # is when the aggregator wrote the row, which can be months after the
+    # underlying conversation if the understanding worker is backfilling. Brief
+    # filters use source_sent_at to avoid surfacing ancient signals as today's.
+    source_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     surfaced_in_brief_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     user_feedback: Mapped[str | None] = mapped_column(Text)
     feedback_note: Mapped[str | None] = mapped_column(Text)

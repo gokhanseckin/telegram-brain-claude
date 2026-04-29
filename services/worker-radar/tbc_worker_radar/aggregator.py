@@ -14,6 +14,12 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tbc_common.db import MessageUnderstanding, RadarAlert
+from tbc_common.db.models import Message
+
+# Skip emitting alerts whose newest supporting message is older than this.
+# Backfilled understandings of months-old conversations would otherwise mint
+# fresh-looking alerts — see 2026-04-29 Mieszko incident.
+STALE_SIGNAL_CUTOFF = timedelta(days=7)
 
 logger = structlog.get_logger(__name__)
 
@@ -70,6 +76,7 @@ def run_aggregation(session: Session, last_checked_at: datetime) -> datetime:
         groups.setdefault(key, []).append(sig)
 
     cutoff_24h = now - timedelta(hours=24)
+    stale_cutoff = now - STALE_SIGNAL_CUTOFF
 
     for (chat_id, signal_type), sigs in groups.items():
         severity = max(
@@ -79,6 +86,27 @@ def run_aggregation(session: Session, last_checked_at: datetime) -> datetime:
         new_msg_refs: list[dict[str, int]] = [
             {"chat_id": s.chat_id, "message_id": s.message_id} for s in sigs
         ]
+
+        # Compute the freshness anchor: latest send time across this group's
+        # source messages. Skip the whole group if even the newest is too old.
+        sent_at_rows = session.execute(
+            select(Message.sent_at).where(
+                Message.chat_id == chat_id,
+                Message.message_id.in_([s.message_id for s in sigs]),
+            )
+        ).all()
+        sent_ats = [_utc(r[0]) for r in sent_at_rows if r[0] is not None]
+        latest_sent = max(sent_ats) if sent_ats else None
+
+        if latest_sent is None or latest_sent < stale_cutoff:
+            logger.info(
+                "alert_skipped_stale_signal",
+                chat_id=chat_id,
+                signal_type=signal_type,
+                latest_sent=latest_sent.isoformat() if latest_sent else None,
+                cutoff_days=STALE_SIGNAL_CUTOFF.days,
+            )
+            continue
 
         # 3. Check for existing open alert within 24h
         # Load all alerts for this chat+type and filter in Python to handle
@@ -104,6 +132,10 @@ def run_aggregation(session: Session, last_checked_at: datetime) -> datetime:
             # Update severity if new signals are stronger
             if severity > (existing.severity or 0):
                 existing.severity = severity
+            # Refresh freshness anchor to the latest supporting send time.
+            prev = _utc(existing.source_sent_at) if existing.source_sent_at else None
+            if prev is None or latest_sent > prev:
+                existing.source_sent_at = latest_sent
             # Update reasoning (keep same tag, refresh summary)
             tag = _alert_tag(existing.id)
             existing.reasoning = _build_reasoning(tag, sigs)
@@ -123,6 +155,7 @@ def run_aggregation(session: Session, last_checked_at: datetime) -> datetime:
                 severity=severity,
                 title=_build_title(signal_type, chat_id, session),
                 supporting_message_ids=new_msg_refs,
+                source_sent_at=latest_sent,
                 reasoning="",  # will be filled after flush gives us the id
             )
             session.add(alert)

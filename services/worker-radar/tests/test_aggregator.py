@@ -25,11 +25,26 @@ def _mu(
     summary_en: str = "Test signal summary",
     is_directed_at_user: bool = False,
     sentiment_delta: int = 0,
+    sent_at: datetime | None = None,
 ):
-    """Helper to insert a MessageUnderstanding row."""
-    from tbc_common.db.models import MessageUnderstanding
+    """Helper to insert a MessageUnderstanding row + the matching Message.
+
+    The aggregator needs Message.sent_at to compute the alert's freshness
+    anchor (source_sent_at). Tests must seed both rows together.
+    """
+    from tbc_common.db.models import Message, MessageUnderstanding
 
     now = processed_at or datetime.now(UTC)
+    msg_sent = sent_at or now
+    session.add(
+        Message(
+            chat_id=chat_id,
+            message_id=message_id,
+            sent_at=msg_sent,
+            text=summary_en,
+            raw={},
+        )
+    )
     mu = MessageUnderstanding(
         chat_id=chat_id,
         message_id=message_id,
@@ -65,6 +80,36 @@ def test_new_signal_creates_alert(session: Session):
     assert alert.alert_type == "buying"
     assert alert.severity == 4
     assert alert.chat_id == 10
+    # Freshness anchor must be set so the brief filters correctly.
+    assert alert.source_sent_at is not None
+
+
+def test_stale_signal_skipped(session: Session):
+    """A signal whose source message is >7d old must NOT mint a fresh alert.
+
+    This is the bug behind the 2026-04-29 Mieszko incident: backfilled
+    understandings of months-old conversations were producing today-stamped
+    radar alerts that the brief read as fresh news.
+    """
+    from tbc_common.db.models import RadarAlert
+    from tbc_worker_radar.aggregator import run_aggregation
+
+    eight_months_ago = datetime.now(UTC) - timedelta(days=240)
+    _mu(
+        session,
+        chat_id=20,
+        message_id=200,
+        is_signal=True,
+        signal_type="buying",
+        signal_strength=5,
+        sent_at=eight_months_ago,
+    )
+
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
+    run_aggregation(session, epoch)
+
+    alerts = session.query(RadarAlert).all()
+    assert alerts == []
 
 
 def test_second_signal_updates_existing_alert(session: Session):
