@@ -37,5 +37,5 @@ infra/terraform/.terraform.lock.hcl
 infra/ansible/*.retry
 infra/ansible/vault_pass
 
-# Claude Code local state
-.claude/settings.local.json
+# Claude Code local agent state (settings, worktrees, scratch)
+.claude/

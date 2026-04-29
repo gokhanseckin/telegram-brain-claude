@@ -471,8 +471,8 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
 
     elif name == "get_recent_brief":
         date_filter = date.fromisoformat(args["date"]) if args.get("date") else None
-        result = get_recent_brief(db, date_filter=date_filter)
-        return result.model_dump()
+        brief = get_recent_brief(db, date_filter=date_filter)
+        return brief.model_dump()
 
     else:
         raise ValueError(f"Unknown tool: {name}")
