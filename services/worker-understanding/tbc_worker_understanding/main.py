@@ -29,6 +29,7 @@ _POLL_SQL = text("""
       AND m.deleted_at IS NULL
       AND m.text IS NOT NULL
       AND m.text != ''
+      AND m.sent_at >= NOW() - INTERVAL '30 days'
       AND m.chat_id IN (
           SELECT chat_id FROM chats
           WHERE tag IS NOT NULL AND tag != 'ignore'
