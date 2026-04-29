@@ -14,6 +14,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tbc_common.db import Commitment, MessageUnderstanding
+from tbc_common.db.models import Message
 
 logger = structlog.get_logger(__name__)
 
@@ -68,12 +69,22 @@ def extract_commitments(session: Session) -> int:
             except (ValueError, AttributeError):
                 logger.warning("invalid_due_date", due_str=due_str, message_id=mu.message_id)
 
+        # Stamp the commitment with the source message's actual send time so
+        # the brief computes true age, not extractor-clock age.
+        source_sent_at: datetime | None = session.scalar(
+            select(Message.sent_at).where(
+                Message.chat_id == mu.chat_id,
+                Message.message_id == mu.message_id,
+            )
+        )
+
         commitment = Commitment(
             chat_id=mu.chat_id,
             source_message_id=mu.message_id,
             owner=owner,
             description=description,
             due_at=due_at,
+            source_sent_at=source_sent_at,
             status="open",
         )
         session.add(commitment)
