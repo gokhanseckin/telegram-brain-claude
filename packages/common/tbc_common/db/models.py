@@ -131,6 +131,11 @@ class Commitment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # When the underlying conversation actually happened. created_at is when
+    # the extractor wrote the row, which can be months later if the worker
+    # backfilled historical messages. Use source_sent_at for true age and
+    # recency filters; created_at remains for audit/debug.
+    source_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_by_message_id: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(Text, default="open")

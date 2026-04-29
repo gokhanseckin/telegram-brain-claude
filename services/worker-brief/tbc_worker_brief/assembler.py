@@ -6,6 +6,8 @@ import re
 from datetime import UTC, date, datetime, timedelta
 
 import structlog
+from sqlalchemy import and_ as sa_and
+from sqlalchemy import or_ as sa_or
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tbc_common.db.models import (
@@ -168,18 +170,30 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
     ninety_days_ago = now - timedelta(days=90)
 
     def _render_commit(c: Commitment) -> str:
-        c_created = c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=UTC)
-        age_days = (now - c_created).days
-        created_label = c_created.strftime("%Y-%m-%d")
+        # Prefer source_sent_at (when the conversation actually happened) over
+        # created_at (when the extractor wrote the row). Fall back to created_at
+        # only if the column hasn't been backfilled yet.
+        anchor = c.source_sent_at or c.created_at
+        anchor = anchor if anchor.tzinfo else anchor.replace(tzinfo=UTC)
+        age_days = (now - anchor).days
+        date_label = anchor.strftime("%Y-%m-%d")
+        date_kind = "from" if c.source_sent_at else "extracted"
         due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else " (no due date)"
-        return f"- [created {created_label}, age={age_days}d]{due} {c.description}"
+        return f"- [{date_kind} {date_label}, age={age_days}d]{due} {c.description}"
+
+    # Recency filter on the true conversation date when available, falling back
+    # to created_at when source_sent_at is unset (e.g. row predates backfill).
+    recent_filter = sa_or(
+        Commitment.source_sent_at >= ninety_days_ago,
+        sa_and(Commitment.source_sent_at.is_(None), Commitment.created_at >= ninety_days_ago),
+    )
 
     user_commits = session.execute(
         select(Commitment)
         .where(Commitment.status == "open")
         .where(Commitment.owner == "user")
-        .where(Commitment.created_at >= ninety_days_ago)
-        .order_by(Commitment.created_at)
+        .where(recent_filter)
+        .order_by(Commitment.source_sent_at.nullslast(), Commitment.created_at)
     ).scalars().all()
 
     if user_commits:
@@ -193,8 +207,8 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         select(Commitment)
         .where(Commitment.status == "open")
         .where(Commitment.owner == "counterparty")
-        .where(Commitment.created_at >= ninety_days_ago)
-        .order_by(Commitment.created_at)
+        .where(recent_filter)
+        .order_by(Commitment.source_sent_at.nullslast(), Commitment.created_at)
     ).scalars().all()
 
     if cp_commits:
