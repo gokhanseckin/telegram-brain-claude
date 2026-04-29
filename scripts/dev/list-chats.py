@@ -19,7 +19,7 @@ API_ID = int(os.environ["TBC_TG_API_ID"])
 API_HASH = os.environ["TBC_TG_API_HASH"]
 SESSION = "./test_session"
 
-async def main():
+async def main() -> None:
     client = TelegramClient(SESSION, API_ID, API_HASH)
     await client.start()
 

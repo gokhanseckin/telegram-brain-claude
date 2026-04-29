@@ -7,6 +7,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 import structlog
@@ -68,15 +69,17 @@ def _extract_json_object(raw: str) -> str | None:
     return None
 
 
-def _parse_llm_json(raw: str) -> dict | None:
+def _parse_llm_json(raw: str) -> dict[str, Any] | None:
     try:
-        return json.loads(raw)
+        result: dict[str, Any] = json.loads(raw)
+        return result
     except json.JSONDecodeError:
         extracted = _extract_json_object(raw)
         if extracted is None:
             return None
         try:
-            return json.loads(extracted)
+            result = json.loads(extracted)
+            return result
         except json.JSONDecodeError:
             return None
 
@@ -104,7 +107,8 @@ async def _ollama_chat(system: str, user: str) -> str:
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["message"]["content"]
+        content: str = data["message"]["content"]
+        return content
 
 
 def _gather_messages(session: Session, chat_id: int, limit: int = 20) -> list[str]:
