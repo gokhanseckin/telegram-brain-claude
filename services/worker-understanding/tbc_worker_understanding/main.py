@@ -33,7 +33,7 @@ _POLL_SQL = text("""
           SELECT chat_id FROM chats
           WHERE tag IS NOT NULL AND tag != 'ignore'
       )
-    ORDER BY m.sent_at ASC
+    ORDER BY m.sent_at DESC
     LIMIT 10
 """)
 
