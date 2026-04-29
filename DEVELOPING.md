@@ -12,6 +12,10 @@
 # Install all workspace dependencies into a single venv
 uv sync --all-packages
 
+# Install pre-commit hooks (one-time per clone) — blocks accidental commits of
+# secrets, large files, Telethon session files, broken YAML/TOML/JSON, etc.
+uv run pre-commit install
+
 # Bring up Postgres (with pgvector + pg_trgm) and Ollama
 docker compose -f docker-compose.dev.yml up -d
 
@@ -33,6 +37,15 @@ cp .env.example .env
 make lint    # ruff check + mypy
 make test    # pytest (excluding real_ollama)
 make fmt     # ruff format
+
+uv run pre-commit run --all-files   # run hooks across the whole repo
+```
+
+If detect-secrets ever flags a known-fake placeholder (e.g. dev DB password),
+refresh the baseline:
+
+```bash
+uv run detect-secrets scan --baseline .secrets.baseline
 ```
 
 ## Running a service locally

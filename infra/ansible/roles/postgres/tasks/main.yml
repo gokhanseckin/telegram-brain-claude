@@ -109,4 +109,3 @@
     db: tbc
     name: pg_trgm
     state: present
-
