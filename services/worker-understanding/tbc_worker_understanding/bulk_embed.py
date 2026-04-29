@@ -36,7 +36,27 @@ MODEL_VERSION = f"embeddings-only-{date.today().isoformat()}"
 
 MAX_INPUT_CHARS = 8000
 
-_CANDIDATE_SQL = text("""
+# Eligibility shared with chat-tagger's candidate_chats: only chats where the
+# owner has direct involvement (sender / mentioned / replied-to) within the
+# 180-day ingestion window. Skips chats the owner has never touched, even if
+# they're auto-tagged from before the rule was introduced.
+_INVOLVED_CHAT_IDS_SQL = """
+    SELECT DISTINCT chat_id FROM messages
+     WHERE sent_at >= NOW() - INTERVAL '180 days'
+       AND deleted_at IS NULL
+       AND (
+         sender_id = :owner_id
+         OR text ILIKE :mention_pattern
+         OR EXISTS (
+           SELECT 1 FROM messages parent
+            WHERE parent.chat_id = messages.chat_id
+              AND parent.message_id = messages.reply_to_id
+              AND parent.sender_id = :owner_id
+         )
+       )
+"""
+
+_CANDIDATE_SQL = text(f"""
     SELECT m.chat_id, m.message_id, m.text
     FROM messages m
     LEFT JOIN message_understanding mu
@@ -50,11 +70,12 @@ _CANDIDATE_SQL = text("""
           SELECT chat_id FROM chats
           WHERE tag IS NOT NULL AND tag != 'ignore'
       )
+      AND m.chat_id IN ({_INVOLVED_CHAT_IDS_SQL})
     ORDER BY m.sent_at ASC
     LIMIT :batch_size
 """)
 
-_COUNT_SQL = text("""
+_COUNT_SQL = text(f"""
     SELECT COUNT(*)
     FROM messages m
     LEFT JOIN message_understanding mu
@@ -68,11 +89,25 @@ _COUNT_SQL = text("""
           SELECT chat_id FROM chats
           WHERE tag IS NOT NULL AND tag != 'ignore'
       )
+      AND m.chat_id IN ({_INVOLVED_CHAT_IDS_SQL})
 """)
 
 
+def _owner_params() -> dict[str, object]:
+    """Pull owner identity from settings; raise if unset (don't silently fall back)."""
+    owner_id = settings.tg_owner_user_id
+    handle = settings.tg_owner_username
+    if owner_id is None or not handle:
+        raise RuntimeError(
+            "TBC_TG_OWNER_USER_ID and TBC_TG_OWNER_USERNAME must be set "
+            "for bulk_embed to apply the involvement filter"
+        )
+    return {"owner_id": owner_id, "mention_pattern": f"%@{handle}%"}
+
+
 def _fetch_batch(session: Session, batch_size: int) -> list[tuple[int, int, str]]:
-    rows = session.execute(_CANDIDATE_SQL, {"batch_size": batch_size}).fetchall()
+    params = {"batch_size": batch_size, **_owner_params()}
+    rows = session.execute(_CANDIDATE_SQL, params).fetchall()
     return [(r.chat_id, r.message_id, r.text) for r in rows]
 
 
@@ -124,7 +159,7 @@ async def run_bulk_embed(batch_size: int, limit: int | None, dry_run: bool) -> N
     SessionFactory = get_sessionmaker()
 
     with SessionFactory() as session:
-        total_pending = session.execute(_COUNT_SQL).scalar_one()
+        total_pending = session.execute(_COUNT_SQL, _owner_params()).scalar_one()
 
     log.info(
         "bulk_embed_start",
