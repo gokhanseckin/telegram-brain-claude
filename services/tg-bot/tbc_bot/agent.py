@@ -1,12 +1,16 @@
-"""Claude agent with MCP tool access for answering questions about Telegram data."""
+"""Claude / DeepSeek agent with MCP tool access for answering questions about Telegram data."""
 
 from __future__ import annotations
 
+import json
+import time
 from typing import Any
 
 import structlog
 from anthropic import AsyncAnthropic
 from tbc_common.config import settings
+
+from tbc_bot import mcp_client
 
 log = structlog.get_logger(__name__)
 
@@ -66,6 +70,10 @@ items. Detect this and call `write_brief_feedback`:
   commitment never doubles as feedback, and vice versa.
 """
 
+_MAX_TOOL_ITERATIONS = 10
+
+# ── Anthropic client (lazy singleton) ──
+
 _client: AsyncAnthropic | None = None
 
 
@@ -79,8 +87,8 @@ def _get_client() -> AsyncAnthropic:
     return _client
 
 
-async def ask(history: list[dict[str, Any]], user_text: str) -> str:
-    """Call Claude with MCP access. Returns the response text."""
+async def _ask_anthropic(history: list[dict[str, Any]], user_text: str) -> str:
+    """Anthropic path — uses the MCP connector beta for server-side tool handling."""
     client = _get_client()
 
     mcp_token = settings.mcp_bearer_token
@@ -110,9 +118,98 @@ async def ask(history: list[dict[str, Any]], user_text: str) -> str:
 
     log.info(
         "agent_response",
+        provider="anthropic",
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
         stop_reason=response.stop_reason,
     )
 
     return result or "(no response)"
+
+
+# ── DeepSeek client (lazy singleton) ──
+
+_ds_client: Any = None
+
+
+def _get_ds_client() -> Any:
+    global _ds_client
+    if _ds_client is None:
+        from openai import AsyncOpenAI
+
+        api_key = settings.deepseek_api_key
+        if api_key is None:
+            raise RuntimeError("DEEPSEEK_API_KEY is not set")
+        _ds_client = AsyncOpenAI(
+            api_key=api_key.get_secret_value(),
+            base_url="https://api.deepseek.com",
+        )
+    return _ds_client
+
+
+async def _ask_deepseek(history: list[dict[str, Any]], user_text: str) -> str:
+    """DeepSeek path — own MCP client + OpenAI-compatible function calling."""
+    client = _get_ds_client()
+    tools = await mcp_client.get_tools()
+
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *history,
+        {"role": "user", "content": user_text},
+    ]
+
+    for iteration in range(_MAX_TOOL_ITERATIONS):
+        response = await client.chat.completions.create(
+            model="deepseek-chat",
+            max_tokens=4096,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+        )
+        choice = response.choices[0]
+
+        if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+            break
+
+        messages.append(choice.message.model_dump(exclude_unset=True))
+
+        for tc in choice.message.tool_calls:
+            t0 = time.monotonic()
+            result_text = await mcp_client.call_tool(
+                tc.function.name,
+                json.loads(tc.function.arguments),
+            )
+            log.info(
+                "agent_tool_call",
+                tool=tc.function.name,
+                duration_ms=int((time.monotonic() - t0) * 1000),
+                iteration=iteration,
+            )
+            messages.append(
+                {"role": "tool", "tool_call_id": tc.id, "content": result_text}
+            )
+    else:
+        log.warning("agent_max_iterations", max=_MAX_TOOL_ITERATIONS)
+
+    content = choice.message.content or ""
+    log.info(
+        "agent_response",
+        provider="deepseek",
+        prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+        completion_tokens=response.usage.completion_tokens if response.usage else 0,
+        stop_reason=choice.finish_reason,
+    )
+    return content.strip() or "(no response)"
+
+
+# ── Public dispatcher ──
+
+
+async def ask(history: list[dict[str, Any]], user_text: str) -> str:
+    """Call the configured LLM with MCP access. Returns the response text."""
+    provider = settings.llm_provider
+    if provider == "anthropic":
+        return await _ask_anthropic(history, user_text)
+    if provider == "deepseek":
+        return await _ask_deepseek(history, user_text)
+    raise ValueError(f"Unknown LLM provider: {provider!r}")
