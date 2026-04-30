@@ -73,20 +73,31 @@ _CANCEL_BY_ID = re.compile(
     re.IGNORECASE,
 )
 
+# Q&A about commitments by id: "explain c9273", "what is c9273",
+# "tell me about c9273 and c9275". The c<digits> token is the
+# disambiguator — Qwen 3B was misclassifying these as ambiguous and
+# returning the rephrase prompt instead of routing to Claude.
+_QA_VERBS = (
+    r"(?:explain|describe|"
+    r"what(?:\s+is|\s+are|'s|s)?|"
+    r"tell\s+me\s+about|"
+    r"details?\s+(?:on|about)|"
+    r"info\s+(?:on|about))"
+)
+_QA_ABOUT_COMMITMENTS = re.compile(
+    rf"^{_QA_VERBS}\s+c\d+(?:\s*(?:,|and|&)\s*c\d+)*\s*\??$",
+    re.IGNORECASE,
+)
+
 # Retag rule: only fires on explicit hex-ref + tag combos.
 # Name-based retag ("Doğa personal") needs LLM — too ambiguous at regex level.
-_VALID_TAGS = {
-    "client", "prospect", "supplier", "partner", "internal",
-    "friend", "family", "personal", "ignore",
-}
-_TAG_VOCAB_RE = "(?:" + "|".join(sorted(_VALID_TAGS)) + ")"
-
+# Tag validation is dynamic — match any word token, then check against valid_tags.
 _RETAG_TAG_FIRST = re.compile(
-    rf"^{_TAG}\s+(?P<new_tag>{_TAG_VOCAB_RE})$",
+    rf"^{_TAG}\s+(?P<new_tag>\w+)$",
     re.IGNORECASE,
 )
 _RETAG_NEWTAG_FIRST = re.compile(
-    rf"^(?P<new_tag>{_TAG_VOCAB_RE})\s+{_TAG}$",
+    rf"^(?P<new_tag>\w+)\s+{_TAG}$",
     re.IGNORECASE,
 )
 
@@ -109,13 +120,23 @@ def _classify_sentiment(raw: str) -> str | None:
     return None
 
 
-def match_rule(text: str) -> RouterDecision | None:
+_DEFAULT_VALID_TAGS = {
+    "client", "prospect", "supplier", "partner", "internal",
+    "friend", "family", "personal", "ignore",
+}
+
+
+def match_rule(text: str, valid_tags: set[str] | None = None) -> RouterDecision | None:
     """Try to match `text` to a feedback intent via regex.
 
     Returns a RouterDecision with confidence=1.0 on a clean match; None
     otherwise. Caller is expected to fall through to the LLM (PR2) or
     Claude (PR1) on None.
+
+    valid_tags: if provided, retag rules validate against this set.
+    Falls back to the 9 default tags when None (e.g. in tests).
     """
+    tags = valid_tags if valid_tags is not None else _DEFAULT_VALID_TAGS
     stripped = text.strip().rstrip(".")
     if not stripped:
         return None
@@ -144,16 +165,27 @@ def match_rule(text: str) -> RouterDecision | None:
             fields={"commitment_id": int(m.group("cid")), "reason": reason or None},
         )
 
+    if _QA_ABOUT_COMMITMENTS.match(stripped):
+        return RouterDecision(
+            intent="qa",
+            confidence=1.0,
+            source="rule",
+            fields={},
+        )
+
     for pat in (_RETAG_TAG_FIRST, _RETAG_NEWTAG_FIRST):
         m = pat.match(stripped)
         if m:
+            new_tag = m.group("new_tag").lower()
+            if new_tag not in tags:
+                continue
             return RouterDecision(
                 intent="retag",
                 confidence=1.0,
                 source="rule",
                 fields={
                     "target": m.group("ref").lower(),
-                    "new_tag": m.group("new_tag").lower(),
+                    "new_tag": new_tag,
                 },
             )
 
