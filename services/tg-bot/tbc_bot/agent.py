@@ -40,6 +40,24 @@ $67.05", "forget that thing about Bob", "push the contract to next Friday",
 When the user message includes a "[meta] current_message_id=..." line,
 pass that integer as `resolved_by_message_id` on `resolve_commitment` so
 we can trace closures back to the exact DM that triggered them.
+
+Brief feedback — IMPORTANT:
+The Morning Brief tags each "Worth Noticing" item with a short reference
+like `#ab12`. The user calibrates future briefs by reacting to those
+items. Detect this and call `write_brief_feedback`:
+
+- "the #ab12 was useful" / "yes, good one" referring to a tag → call
+  `write_brief_feedback(feedback_type="useful", item_ref="ab12")`.
+- "not useful, just smalltalk" / "no" referring to a tag → call
+  `write_brief_feedback(feedback_type="not_useful", item_ref="ab12",
+  note="just smalltalk")`.
+- "you missed X" / "this should have been in the brief" without a tag
+  → call `write_brief_feedback(feedback_type="missed_important",
+  note="<user's phrasing>")`. No item_ref needed.
+- After writing, confirm in your reply: "Recorded: <type> on #<ref>" or
+  "Recorded missed: <note>" so the user can correct you.
+- Feedback and commitment management are independent — a DM about a
+  commitment never doubles as feedback, and vice versa.
 """
 
 _client: AsyncAnthropic | None = None
