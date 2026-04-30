@@ -35,14 +35,14 @@ class Settings(BaseSettings):
     )
     embedding_model: str = Field(default="bge-m3", validation_alias="TBC_EMBEDDING_MODEL")
 
-    # Anthropic (tg-bot agent always uses this; brief/weekly when TBC_LLM_PROVIDER=anthropic)
+    # Anthropic (brief/weekly/agent when TBC_LLM_PROVIDER=anthropic)
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     brief_model: str = Field(default="claude-sonnet-4-6", validation_alias="TBC_BRIEF_MODEL")
 
     # DeepSeek (brief/weekly when TBC_LLM_PROVIDER=deepseek)
     deepseek_api_key: SecretStr | None = Field(default=None, validation_alias="DEEPSEEK_API_KEY")
 
-    # Provider selection for brief + weekly workers. Agent always uses Anthropic.
+    # Provider selection for brief + weekly workers and the tg-bot agent.
     llm_provider: str = Field(default="deepseek", validation_alias="TBC_LLM_PROVIDER")
 
     # Telegram userbot

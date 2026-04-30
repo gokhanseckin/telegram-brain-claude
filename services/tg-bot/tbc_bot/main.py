@@ -31,6 +31,16 @@ async def main() -> None:
     if not settings.mcp_public_url:
         raise RuntimeError("TBC_MCP_PUBLIC_URL is not set")
 
+    provider = settings.llm_provider
+    if provider == "anthropic":
+        if settings.anthropic_api_key is None:
+            raise RuntimeError("ANTHROPIC_API_KEY required when TBC_LLM_PROVIDER=anthropic")
+    elif provider == "deepseek":
+        if settings.deepseek_api_key is None:
+            raise RuntimeError("DEEPSEEK_API_KEY required when TBC_LLM_PROVIDER=deepseek")
+    else:
+        raise RuntimeError(f"Unknown TBC_LLM_PROVIDER: {provider!r}")
+
     bot = Bot(
         token=token.get_secret_value(),
         default=DefaultBotProperties(parse_mode=None),
