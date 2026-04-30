@@ -15,7 +15,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from tbc_common.config import settings
 from tbc_common.db.models import Chat, Message, Tag
-from tbc_common.db.tags import get_active_tags, get_valid_tag_names
+from tbc_common.db.tags import get_active_tags
 
 from tbc_worker_chat_tagger.centroids import (
     ClassificationResult,

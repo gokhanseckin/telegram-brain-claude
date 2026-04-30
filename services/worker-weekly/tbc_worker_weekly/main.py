@@ -10,9 +10,8 @@ import structlog
 from apscheduler.schedulers.background import BackgroundScheduler
 from tbc_common.config import settings
 from tbc_common.db.session import get_sessionmaker
-from tbc_common.logging import configure_logging
-
 from tbc_common.db.tags import get_active_tags
+from tbc_common.logging import configure_logging
 from tbc_common.prompts.weekly import build_weekly_system
 
 from tbc_worker_weekly.assembler import build_weekly_input, monday_of_week

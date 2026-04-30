@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from tbc_common.db.models import Tag
 
-
 _DEFAULT_TAG_NAMES = "client, prospect, supplier, partner, internal, friend, family, personal, ignore"
 
 

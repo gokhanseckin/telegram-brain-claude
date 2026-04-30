@@ -12,9 +12,8 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
-
 from tbc_common.db.session import get_sessionmaker
-from tbc_common.db.tags import get_active_tags, get_valid_tag_names
+from tbc_common.db.tags import get_active_tags
 
 from tbc_bot.agent import ask
 from tbc_bot.guards import is_owner
