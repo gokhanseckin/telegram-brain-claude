@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import UTC, date, datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from tbc_common.prompts import BRIEF_SYSTEM
@@ -192,6 +193,51 @@ def test_trigger_file_causes_immediate_run(tmp_path, monkeypatch):
 
     assert run_called, "run_brief should have been called"
     assert not os.path.exists(trigger_path), "trigger file should be deleted"
+
+
+def test_render_commitment_includes_short_id():
+    """Each commitment row must carry `(c<id>)` so the user can reference
+    it later. Regression catches accidental drop of the inline tag."""
+    from tbc_worker_brief.assembler import render_commitment
+
+    now = datetime(2026, 4, 30, 12, 0, tzinfo=UTC)
+    c = SimpleNamespace(
+        id=42,
+        source_sent_at=datetime(2026, 4, 25, 10, 0, tzinfo=UTC),
+        created_at=datetime(2026, 4, 25, 10, 5, tzinfo=UTC),
+        due_at=None,
+        description="Send the report to Bob",
+    )
+    line = render_commitment(c, now=now)
+    assert "(c42)" in line
+    assert "Send the report to Bob" in line
+    assert "age=5d" in line
+
+
+def test_render_commitment_short_id_with_due_date():
+    from tbc_worker_brief.assembler import render_commitment
+
+    now = datetime(2026, 4, 30, 12, 0, tzinfo=UTC)
+    c = SimpleNamespace(
+        id=7,
+        source_sent_at=None,
+        created_at=datetime(2026, 4, 28, 10, 0, tzinfo=UTC),
+        due_at=datetime(2026, 5, 5, 12, 0, tzinfo=UTC),
+        description="contract review with Acme",
+    )
+    line = render_commitment(c, now=now)
+    assert "(c7)" in line
+    assert "due: 2026-05-05" in line
+    # source_sent_at unset → falls back to extracted-from kind
+    assert "extracted" in line
+
+
+def test_brief_format_spec_preserves_short_id_instruction():
+    """The format spec passed to the LLM must explicitly tell it to keep
+    the (c<id>) tag inline in ON YOUR PLATE / WAITING ON OTHERS."""
+    from tbc_worker_brief.assembler import BRIEF_FORMAT_SPEC
+
+    assert "(c<id>)" in BRIEF_FORMAT_SPEC
 
 
 def test_trigger_file_no_run_when_absent(tmp_path, monkeypatch):
