@@ -112,6 +112,11 @@ async def handle_text(message: Message) -> None:
         except CommitmentLookupFailed as exc:
             await message.answer(str(exc))
             log.info(
+                "router_commitment_not_found",
+                commitment_id=decision.fields["commitment_id"],
+                intent=decision.intent,
+            )
+            log.info(
                 "router_dispatch",
                 intent=decision.intent,
                 source=decision.source,

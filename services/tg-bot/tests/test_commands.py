@@ -314,6 +314,50 @@ async def test_done_unknown_id_replies_no_commitment_no_call():
 
 
 @pytest.mark.asyncio
+async def test_done_not_found_emits_log():
+    from tbc_bot.handlers.commitments import cmd_done
+    from tbc_common.db.commitments import CommitmentNotFound
+
+    msg = _make_message("/done c99999")
+
+    with (
+        patch("tbc_bot.handlers.commitments.is_owner", return_value=True),
+        patch(
+            "tbc_bot.handlers.commitments.resolve_commitment",
+            side_effect=CommitmentNotFound("commitment 99999 not found"),
+        ),
+        patch("tbc_bot.handlers.commitments.log") as mock_log,
+    ):
+        await cmd_done(msg)
+
+    mock_log.info.assert_called_once_with(
+        "slash_done_not_found", commitment_id=99999
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_not_found_emits_log():
+    from tbc_bot.handlers.commitments import cmd_cancel
+    from tbc_common.db.commitments import CommitmentNotFound
+
+    msg = _make_message("/cancel c99999")
+
+    with (
+        patch("tbc_bot.handlers.commitments.is_owner", return_value=True),
+        patch(
+            "tbc_bot.handlers.commitments.cancel_commitment",
+            side_effect=CommitmentNotFound("commitment 99999 not found"),
+        ),
+        patch("tbc_bot.handlers.commitments.log") as mock_log,
+    ):
+        await cmd_cancel(msg)
+
+    mock_log.info.assert_called_once_with(
+        "slash_cancel_not_found", commitment_id=99999
+    )
+
+
+@pytest.mark.asyncio
 async def test_done_no_args_shows_usage():
     from tbc_bot.handlers.commitments import cmd_done
 

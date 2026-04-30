@@ -110,6 +110,7 @@ async def cmd_done(message: Message) -> None:
             _resolve_sync, commitment_id, note, message.message_id
         )
     except CommitmentNotFound:
+        log.info("slash_done_not_found", commitment_id=commitment_id)
         await message.answer(f"No commitment c{commitment_id} found.")
         return
     except Exception:
@@ -149,6 +150,7 @@ async def cmd_cancel(message: Message) -> None:
             _cancel_sync, commitment_id, reason
         )
     except CommitmentNotFound:
+        log.info("slash_cancel_not_found", commitment_id=commitment_id)
         await message.answer(f"No commitment c{commitment_id} found.")
         return
     except Exception:
