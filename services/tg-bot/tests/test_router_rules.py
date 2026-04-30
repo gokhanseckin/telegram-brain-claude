@@ -176,3 +176,50 @@ def test_ref_uppercase_input_lowercased():
     decision = match_rule("#ABCD useful")
     assert decision is not None
     assert decision.fields["item_ref"] == "abcd"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Explain c9273",
+        "explain c9273 and c9275",
+        "Explain c9273, c9275",
+        "Explain c9273 & c9275",
+        "What is c42",
+        "what's c42",
+        "What are c1 and c2",
+        "Tell me about c9273",
+        "tell me about c9273 and c9275",
+        "Details on c42",
+        "details about c42",
+        "Describe c42",
+        "Info on c42",
+        "Explain c9273?",
+        "explain c9273.",
+    ],
+)
+def test_qa_about_commitments_matches(text):
+    decision = match_rule(text)
+    assert decision is not None
+    assert decision.intent == "qa"
+    assert decision.source == "rule"
+    assert decision.confidence == 1.0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Explain something",          # no c<id>
+        "What is the weather",        # no c<id>
+        "c9273",                      # bare id, no verb
+    ],
+)
+def test_qa_about_commitments_no_match(text):
+    decision = match_rule(text)
+    assert decision is None or decision.intent != "qa"
+
+
+def test_qa_does_not_swallow_commitment_shortcuts():
+    """`done c<id>` and `cancel c<id>` must keep their original intent."""
+    assert match_rule("done c9273").intent == "commitment_resolve"
+    assert match_rule("cancel c9273").intent == "commitment_cancel"
