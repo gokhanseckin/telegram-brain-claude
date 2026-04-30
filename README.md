@@ -46,7 +46,11 @@ The Telegram bot is the sole UI. DM the bot one of these commands (only the conf
 |---|---|
 | `/start` | Onboarding flow: tag your top chats with role labels. |
 | `/tag` | Re-runs the onboarding tag-walk for any chats still missing a manual tag. |
+| `/retag` | Guided FSM to re-tag a single chat. Send name, `@username`, or `#ref`; pick from candidates if multiple match; pick a tag from the inline keyboard. |
 | `/ignore <ChatName>` | Mark a chat as `ignore` so the brief skips it. The mark is locked. |
+| `/listtags` | List all active tags with their description and AI guidance. |
+| `/newtag` | Create a new role tag (FSM: name → description → optional AI guidance). |
+| `/edittag` | Edit an existing tag's description or guidance, or deactivate it. |
 
 ### Conversation control
 
@@ -71,35 +75,43 @@ Three distinct tag systems, three different purposes — easy to confuse, import
 |---|---|---|---|
 | `#xxxx` | At the end of "💡 Worth Noticing" bullets in the brief. 4-char hex (e.g. `#a8ce`). | A specific **radar alert / brief item**. Minted by `worker-radar`. | `/feedback #xxxx <type>` to calibrate future briefs. |
 | `(c<id>)` | At the end of "✅ On Your Plate" / "🔔 Waiting on Others" bullets in the brief. Integer with `c` prefix (e.g. `(c42)`). | A specific **commitment** row. The integer is the database primary key. | `/done c<id>` or `/cancel c<id>` to mark complete or drop. |
-| Role tag | Per-chat metadata on the `chats` table. One of `client / prospect / supplier / partner / internal / friend / family / personal / ignore`. | The **role this counterparty plays**. | `/tag`, `/ignore`, the auto-tagger, brief routing logic, and DM retag (see below). |
+| Role tag | Per-chat metadata on the `chats` table. Defined dynamically in the `tags` table (9 system tags ship by default; create custom ones with `/newtag`). Run `/listtags` to see the live set. | The **role this counterparty plays**. | `/tag`, `/retag`, `/ignore`, the auto-tagger, brief routing logic, and DM retag (see below). |
 
 **These are NOT interchangeable.** A DM like "Doğa is personal" is a *role-tag correction* on the `chats.tag` column — a `retag` intent. It is **not** brief feedback (`#xxxx`) and **not** a commitment action (`(c<id>)`).
 
-### Retag a chat via DM
+### Retag a chat
 
-You can correct a chat's role tag by DM. Three syntax forms, all going through the same retag executor:
+Three ways to correct a chat's role tag. All write `chats.tag = <new>`, `tag_locked = true`, `tag_source = 'manual'`.
 
-**By hex ref** (rule path, instant — no LLM):
+**Guided command — `/retag`** (recommended, no LLM):
+1. Send `/retag`
+2. Send the target — name, `@username`, or `#ref`. Search matches both `chats.title` and `chats.username`; an exact `@username` match takes precedence over a name contains-match.
+3. If multiple chats match, pick from an inline keyboard.
+4. Pick the new tag from an inline keyboard of active tags.
+5. `/cancel` aborts at any step.
+
+**By hex ref via free-text DM** (rule path, instant — no LLM):
 ```
 #86ab personal
 personal #86ab
 ```
 
-**By name** (LLM path — Qwen classifies the intent, ~10-25s):
+**By name/username via free-text DM** (LLM path — Qwen classifies, ~10-25s):
 ```
 Doğa is personal
-Doğa Kaya personal, not internal
+@unquaLe is friend
+Doğa who is username @unquaLe is friend not internal
 ```
 
-The bot searches for the chat title, then echoes back for confirmation:
+The bot searches title + username, then echoes back for confirmation:
 ```
 Retag 'Doğa Kaya' (chat 999) as personal? Reply OK or NO.
 ```
-- **OK** → writes `chats.tag = personal`, `tag_locked = true`, `tag_source = 'manual'`.
+- **OK** → applies the change.
 - **NO** → cancels, no changes.
 - Any other message → dismisses the pending retag silently.
 
-If the name matches multiple chats, the bot lists the top 5 and asks you to narrow down. If no chat matches, you get "No chat matching '…' found."
+If the target matches multiple chats, the bot lists the top 5 and asks you to narrow down. If no chat matches, you get "No chat matching '…' found." When both a name and `@username` are present, Qwen is instructed to prefer `@username` since it's unique.
 
 ## DM routing
 
