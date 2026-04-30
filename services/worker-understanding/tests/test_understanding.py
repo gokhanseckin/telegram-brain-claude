@@ -68,6 +68,7 @@ async def test_valid_json_writes_row() -> None:
             ollama=ollama,
             understanding_model="test-model",
             embedding_model="embed-model",
+            system_prompt="test-system",
         )
 
     # session.execute and session.commit must have been called
@@ -102,6 +103,7 @@ async def test_malformed_json_persists_failed_row() -> None:
             ollama=ollama,
             understanding_model="test-model",
             embedding_model="embed-model",
+            system_prompt="test-system",
         )
 
     insert_call_kwargs = mock_insert.return_value.values.call_args.kwargs
@@ -132,6 +134,7 @@ async def test_markdown_fenced_json_is_parsed() -> None:
             ollama=ollama,
             understanding_model="test-model",
             embedding_model="embed-model",
+            system_prompt="test-system",
         )
 
     kwargs = mock_insert.return_value.values.call_args.kwargs
@@ -160,6 +163,7 @@ async def test_missing_signal_fields_default_null() -> None:
             ollama=ollama,
             understanding_model="test-model",
             embedding_model="embed-model",
+            system_prompt="test-system",
         )
 
     insert_call_kwargs = mock_insert.return_value.values.call_args.kwargs
@@ -187,6 +191,7 @@ async def test_reprocessing_updates_existing_row() -> None:
             ollama=ollama,
             understanding_model="test-model",
             embedding_model="embed-model",
+            system_prompt="test-system",
         )
 
     # Confirm on_conflict_do_update was called (not a bare insert)
