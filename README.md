@@ -10,7 +10,7 @@ See [docs/mvp-spec.md](docs/mvp-spec.md) for the full product spec.
 
 ## Status
 
-MVP in active development. Single-user, self-hosted on a Hetzner CCX23.
+MVP in active development. Single-user, self-hosted on a Hetzner CX43 (8 vCPU shared, 16 GB RAM, no GPU — Qwen/embeddings run on CPU).
 
 ## Architecture at a glance
 
@@ -18,9 +18,9 @@ MVP in active development. Single-user, self-hosted on a Hetzner CCX23.
 - `services/worker-understanding` — local Qwen 2.5 7B JSON extraction + bge-m3 embeddings.
 - `services/worker-radar`, `services/worker-commitments` — derived analytics.
 - `services/worker-brief`, `services/worker-weekly` — Sonnet 4.6 synthesis.
-- `services/tg-bot` — aiogram bot (sole UI).
-- `services/mcp-server` — read-only MCP tools over Streamable HTTP.
-- `packages/common` — shared DB models, config, prompts.
+- `services/tg-bot` — aiogram bot (sole UI). Local-first DM router uses Qwen 2.5 3B for intent classification and falls through to Sonnet 4.6 only for Q&A and unkeyed commitment phrasing — see [DM routing](#dm-routing).
+- `services/mcp-server` — read-only MCP tools over Streamable HTTP. Plus the write tools (`write_brief_feedback`, `resolve_commitment`, `cancel_commitment`, `update_commitment`) used by the Sonnet path.
+- `packages/common` — shared DB models, config, prompts, and write functions reused by the bot and the MCP server (single source of truth for both code paths).
 - `infra/` — Terraform (Hetzner) + Ansible provisioning.
 
 ## Bot commands
@@ -31,50 +31,109 @@ The Telegram bot is the sole UI. DM the bot one of these commands (only the conf
 
 | Command | What it does |
 |---|---|
-| `/brief` | Generate today's Morning Brief now (instead of waiting for the 7am job). Bot replies once the worker has triggered it. |
+| `/brief` | Generate today's Morning Brief now (instead of waiting for the 7am job). |
 | `/weekly` | Generate the Weekly Review now. |
-| `/feedback #xxxx <type> "note"` | Rate an item from the brief (see [Brief feedback loop](#brief-feedback-loop) below). |
-| `/feedback missed "note"` | Tell the brief writer it should have surfaced something it missed. |
-| `/search <query>` | Keyword search over your Telegram messages. Returns up to 5 hits with chat name + 120-char snippet. |
-| `/status` | Show ingestion + understanding health: total messages, understood count, unprocessed backlog, last activity timestamps, pause flag. |
+| `/feedback #xxxx <type> "note"` | Rate a brief item by its `#xxxx` tag. See [Tags](#tags) and [Brief feedback](#brief-feedback). |
+| `/feedback missed "note"` | Report something the brief should have surfaced but didn't. |
+| `/done c<id> [note]` | Mark a commitment complete by its `(c<id>)` tag from the brief. See [Commitment shortcuts](#commitment-shortcuts). |
+| `/cancel c<id> [reason]` | Cancel a commitment as no-longer-relevant. |
+| `/search <query>` | Keyword search over your Telegram messages. Returns up to 5 hits. |
+| `/status` | Ingestion + understanding health: counts, last-activity timestamps, pause flag. |
 
 ### Setup & maintenance
 
 | Command | What it does |
 |---|---|
-| `/start` | Onboarding flow: walks you through tagging your top chats with role labels (client, prospect, supplier, partner, internal, friend, family, personal, ignore). |
-| `/tag` | Re-runs the onboarding tag-walk for any chats still missing a manual tag. Same UI as `/start`. |
-| `/ignore <ChatName>` | Mark a chat (matched by title substring) as `ignore` so the brief skips it. The mark is locked — the auto-tagger won't overwrite. |
+| `/start` | Onboarding flow: tag your top chats with role labels. |
+| `/tag` | Re-runs the onboarding tag-walk for any chats still missing a manual tag. |
+| `/ignore <ChatName>` | Mark a chat as `ignore` so the brief skips it. The mark is locked. |
 
 ### Conversation control
 
 | Command | What it does |
 |---|---|
-| Any non-slash text | Sent to Claude with full MCP tool access. Used for ad-hoc questions ("did Mieszko ever mention BVI?") and **commitment management** (see below). |
+| Any non-slash text | Routed through the [DM router](#dm-routing) — local-first, falls through to Claude only when needed. |
 | `/reset` | Clear the Claude conversation history for this DM thread. |
 
 ### Operations
 
 | Command | What it does |
 |---|---|
-| `/pause` | Stop the Telegram-side ingestion (keeps the worker pipeline running on what's already in the DB). Useful before maintenance. |
+| `/pause` | Stop the Telegram-side ingestion (workers keep running on what's already in the DB). |
 | `/resume` | Re-enable ingestion after `/pause`. |
-| `/help` | Show the in-bot help text — abbreviated version of this table. |
+| `/help` | In-bot help text. |
 
-## Brief feedback loop
+## Tags
 
-The brief is **calibrated by you**. Each "Worth Noticing" item that comes from a radar alert ends with a `#xxxx` reference tag. Two ways to react — both write the same `brief_feedback` row:
+Three distinct tag systems, three different purposes — easy to confuse, important to keep separate:
 
-**Plain DM** (Claude routes it via the `write_brief_feedback` MCP tool):
+| Tag | Where it appears | What it identifies | Used for |
+|---|---|---|---|
+| `#xxxx` | At the end of "💡 Worth Noticing" bullets in the brief. 4-char hex (e.g. `#a8ce`). | A specific **radar alert / brief item**. Minted by `worker-radar`. | `/feedback #xxxx <type>` to calibrate future briefs. |
+| `(c<id>)` | At the end of "✅ On Your Plate" / "🔔 Waiting on Others" bullets in the brief. Integer with `c` prefix (e.g. `(c42)`). | A specific **commitment** row. The integer is the database primary key. | `/done c<id>` or `/cancel c<id>` to mark complete or drop. |
+| Role tag | Per-chat metadata on the `chats` table. One of `client / prospect / supplier / partner / internal / friend / family / personal / ignore`. | The **role this counterparty plays**. | `/tag`, `/ignore`, the auto-tagger, and brief routing logic. **Not yet** addressable by DM — see roadmap. |
+
+**These are NOT interchangeable.** A DM like "Doğa is personal" is a *role-tag correction* on the `chats.tag` column. It is **not** brief feedback (`#xxxx`) and **not** a commitment action (`(c<id>)`). Until the planned `retag` intent ships, the bot treats role-tag DMs as ambiguous and asks you to rephrase.
+
+## DM routing
+
+Free-text DMs flow through a three-stage router. The first stage that matches handles the message; later stages don't run.
 
 ```
-the #5096 was useful
-not useful, just smalltalk #5096
-you missed Yuri's exit, that deserved a callout
+DM
+ │
+ ▼
+[1] Slash command? ──► dedicated handler              (~150ms)
+ │     (covers: /done, /cancel, /feedback, /brief, /tag, /ignore, etc.)
+ │  no
+ ▼
+[2] Regex rules ─────► local executor                 (~150ms, no LLM)
+ │     • #xxxx <sentiment> / <sentiment> #xxxx  → write brief_feedback
+ │     • done|finished|completed c<id> [note]   → resolve_commitment
+ │     • cancel|drop|forget c<id> [reason]      → cancel_commitment
+ │  no match
+ ▼
+[3] Qwen 2.5 3B (Ollama, format=json) ──► classify intent + extract fields
+ │     │
+ │     ▼ intent ∈ {feedback}        → local executor   (~10-25s, no Claude)
+ │     ▼ intent = ambiguous         → "rephrase" reply (no Claude)
+ │     ▼ intent ∈ {qa, commitment_*  → fall through    (Claude, see below)
+ │       without explicit c<id>}
+ ▼
+[4] Claude (Anthropic API) + MCP tools                 (~5min)
+       • Q&A questions: "did Alice mention pricing last week?"
+       • Free-text commitments: "I sent the report" (Claude searches via MCP get_commitments)
 ```
 
-**Slash command** (precise bypass, no LLM):
+### What Qwen does vs what Claude does
 
+**Local Qwen 2.5 3B** (Ollama on the VPS, no network):
+- Classifies intent on free-text DMs that the rule path didn't catch.
+- Extracts fields (`feedback_type`, `item_ref`, `note`, `query`).
+- Schema-validated output. Failure modes (parse error, unknown intent, low confidence) all collapse to `ambiguous` — **never** escalate to Claude.
+- Cost: free. Latency: ~10-25s on CPU (varies with model warm/cold and contention).
+
+**Claude (Anthropic API)** is called **at most once per DM**, and only on:
+- LLM intent = `qa` (question that needs to query chat history / signals).
+- LLM intent = `commitment_*` **without** an explicit `c<id>` (Claude uses MCP `get_commitments(query=...)` to find the right row).
+
+That's it. The rule path, the local feedback executor, the local commitment shortcut path, and the ambiguous-rephrase reply **never** call Claude.
+
+You can audit the routing in real time:
+```
+journalctl -u tbc-bot | grep router_dispatch
+```
+Each DM emits one structured log line: `{intent, source, confidence, claude_called: bool}`.
+
+### The cost guardrail
+
+The router was built around one hard property: **at most one Claude call per DM**. There is no auto-retry through Claude on Qwen failure, no "if Qwen is unsure, just ask Claude," no batching. Schema mismatch → ambiguous. Ollama outage → ambiguous. Low confidence → ambiguous. The user gets asked to rephrase. The next DM is a fresh budget.
+
+## Brief feedback
+
+The brief is **calibrated by you**. Each "💡 Worth Noticing" item that comes from a radar alert ends with a `#xxxx` reference tag (see [Tags](#tags)). Three ways to react, all writing the same `brief_feedback` row:
+
+**Slash command** (precise, no LLM):
 ```
 /feedback #5096 not_useful "I already know about this"
 /feedback #5096 useful
@@ -82,64 +141,57 @@ you missed Yuri's exit, that deserved a callout
 /feedback missed "Yuri's exit deserved a callout"
 ```
 
-Aliases the slash parser accepts:
+**Rule-matched DM** (sub-second, no LLM):
+```
+#5096 useful
+#5096 not useful just smalltalk
+not useful #5096
+```
 
-| Type | Aliases |
+**Free-text DM** (Qwen ~10-25s, no Claude):
+```
+the #5096 was useful, good catch
+you missed Yuri's exit, that deserved a callout
+```
+
+Slash aliases:
+
+| Canonical | Aliases |
 |---|---|
-| `useful` | `useful`, `yes`, `good` |
-| `not_useful` | `not_useful`, `notuseful`, `no` |
-| `missed_important` | `missed`, `missed_important` |
+| `useful` | `yes`, `good` |
+| `not_useful` | `notuseful`, `no` |
+| `missed_important` | `missed` |
 
-What it does:
+The slash parser also rejects unknown types — `/feedback #abcd bogus "..."` replies with usage help and writes nothing.
 
-- Bot writes a row to `brief_feedback`.
-- Tomorrow's brief includes the last 14 days of feedback in its system prompt under "calibration".
-- The brief LLM uses that to drop similar items, weight missed-pattern feedback higher, and avoid repeating things you've called out as noisy.
+What the row drives:
+- Tomorrow's brief includes the last 14 days of feedback in its system prompt under "calibration."
+- The brief LLM drops similar items, weights missed-pattern feedback higher, avoids repeating things you've called out as noisy.
 - After ~5-10 events, briefs start feeling personally tuned.
 
-## DM router (local-first)
+## Commitment shortcuts
 
-Free-text DMs go through a 3-stage router before reaching Claude:
+Each open commitment in the brief carries a `(c<id>)` tag — see [Tags](#tags). Three ways to mark one done or cancelled, all going through the same shared write path (identical row shape, same audit annotation `[resolved YYYY-MM-DD: <note>]`):
 
-```
-DM → [1] regex rules        → exec_feedback / exec_commitment_*   (sub-second)
-       │ no match
-       ▼
-     [2] Qwen 2.5 3B (Ollama, format=json)
-       │ schema-validated + confidence ≥ 0.7
-       ▼
-     intent = feedback          → exec_feedback              (~3-5s, free-text reactions)
-     intent = ambiguous         → ask user to rephrase       (no Claude)
-     intent ∈ {qa, commitment_*}→ ask() → Claude             (1 call, existing path)
-```
-
-The rule path now also catches **commitment shortcuts** keyed off the `(c<id>)` tag rendered in the brief:
-
-| You DM | Path | Bot does |
+| You DM | Path | Latency |
 |---|---|---|
-| `/done c42 sent today` | slash | resolve_commitment(42, note="sent today") → "Marked done: c42 — …" |
-| `/cancel c7 no longer needed` | slash | cancel_commitment(7, reason=…) |
-| `done c42 sent today` | rules | same as above, no Claude |
-| `cancel c7` | rules | same as above |
-| `I sent the report` (no id) | qwen → claude | unchanged — Claude uses MCP get_commitments to find the row |
+| `/done c42 sent today` | slash | ~150ms |
+| `/cancel c42 no longer needed` | slash | ~150ms |
+| `done c42 sent today` | rule (regex) | ~150ms |
+| `finished c42` / `completed c42` / `resolved c42` | rule | ~150ms |
+| `cancel c42` / `drop c42` / `forget c42` | rule | ~150ms |
+| `I sent the report` (no id) | Qwen → Claude → MCP | ~5min |
 
-**At most one Claude call per DM.** The router never auto-retries through Claude on a Qwen failure — schema mismatch, low confidence, or Ollama outage all collapse to "rephrase" rather than escalating. Verify with `journalctl -u tbc-bot | grep claude_called`.
+The free-text path (last row) stays on Claude because it needs MCP `get_commitments(query="report")` to find the right row. The shortcut paths bypass that lookup — you already did it by reading the brief.
 
-Slash commands (`/feedback`, `/done`, `/cancel`, `/brief`, `/ignore`, etc.) bypass the router entirely.
-
-## Commitment management via DM
-
-Free-text messages to the bot can resolve, cancel, or update tracked commitments. The agent reads your wording, finds the matching open commitment, and writes the change.
+Updates that aren't a resolve/cancel (push the due date, append a status note) currently still go through the natural-language → Claude path:
 
 | You DM | Bot does |
 |---|---|
-| "I sent the report today" | `resolve_commitment(id, note="sent today")` → status=`done`, audit-annotated |
-| "Paid Gizem the $67.05" | resolve_commitment, same path |
-| "Forget the contract thing with Acme" | `cancel_commitment(id, reason="...")` → status=`cancelled` |
-| "Push the contract to next Friday" | `update_commitment(id, due_at=...)` |
-| "Add a note: waiting on Sara's reply" | `update_commitment(id, note_append="...")` |
+| `Push the contract to next Friday` | `update_commitment(id, due_at=...)` |
+| `Add a note: waiting on Sara's reply` | `update_commitment(id, note_append="...")` |
 
-The bot always confirms with the commitment id and description: `"Marked done: #6879 — send $67.05 more to Gizem."` If multiple plausible matches exist, it lists them and asks which one — never guesses.
+When Claude is involved it always confirms with the commitment id and description: `"Marked done: c42 — send the report to Bob."` If multiple plausible matches exist, it lists them and asks which one — never guesses.
 
 ## Development
 
