@@ -173,3 +173,72 @@ async def test_executor_writes_row_without_ref():
     assert captured[0].note == "Yuri exit deserved a callout"
     assert "missed" in reply.lower()
     assert "Yuri" in reply
+
+
+# ---------------------------------------------------------------------------
+# Retag executors
+# ---------------------------------------------------------------------------
+
+
+def _retag_decision(target: str, new_tag: str) -> RouterDecision:
+    return RouterDecision(
+        intent="retag", confidence=0.9, source="llm",
+        fields={"target": target, "new_tag": new_tag},
+    )
+
+
+@pytest.mark.asyncio
+async def test_exec_retag_search_zero():
+    from tbc_bot.router.executors import exec_retag_search
+
+    with patch(
+        "tbc_bot.router.executors._search_chat_sync",
+        return_value=(0, []),
+    ):
+        outcome = await exec_retag_search(_retag_decision("Alice", "personal"))
+    assert outcome.kind == "zero"
+    assert outcome.new_tag == "personal"
+
+
+@pytest.mark.asyncio
+async def test_exec_retag_search_one():
+    from tbc_bot.router.executors import exec_retag_search
+
+    with patch(
+        "tbc_bot.router.executors._search_chat_sync",
+        return_value=(1, [(999, "Doğa Kaya")]),
+    ):
+        outcome = await exec_retag_search(_retag_decision("Doğa", "personal"))
+    assert outcome.kind == "one"
+    assert outcome.chat_id == 999
+    assert outcome.title == "Doğa Kaya"
+    assert outcome.new_tag == "personal"
+
+
+@pytest.mark.asyncio
+async def test_exec_retag_search_many():
+    from tbc_bot.router.executors import exec_retag_search
+
+    with patch(
+        "tbc_bot.router.executors._search_chat_sync",
+        return_value=(2, [(1, "Doğa A"), (2, "Doğa B")]),
+    ):
+        outcome = await exec_retag_search(_retag_decision("Doğa", "personal"))
+    assert outcome.kind == "many"
+    assert len(outcome.candidates) == 2
+
+
+@pytest.mark.asyncio
+async def test_exec_retag_apply():
+    from tbc_bot.router.executors import exec_retag_apply
+
+    with patch(
+        "tbc_bot.router.executors._apply_retag_sync",
+        return_value="Doğa Kaya",
+    ) as mock_fn:
+        reply = await exec_retag_apply(chat_id=999, new_tag="personal")
+
+    mock_fn.assert_called_once_with(999, "personal")
+    assert "Doğa Kaya" in reply
+    assert "personal" in reply
+    assert "999" in reply

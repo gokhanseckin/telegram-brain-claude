@@ -38,9 +38,14 @@ ALLOWED_INTENTS = {
     "commitment_cancel",
     "commitment_update",
     "qa",
+    "retag",
     "ambiguous",
 }
 ALLOWED_FEEDBACK_TYPES = {"useful", "not_useful", "missed_important"}
+ALLOWED_ROLE_TAGS = {
+    "client", "prospect", "supplier", "partner", "internal",
+    "friend", "family", "personal", "ignore",
+}
 
 
 def _extract_json_object(raw: str) -> str | None:
@@ -151,6 +156,16 @@ def _validate_decision(parsed: dict[str, Any]) -> RouterDecision | None:
                 if not isinstance(val, str):
                     return None
                 fields_out[key] = val.strip()
+
+    elif intent == "retag":
+        target = fields_in.get("target")
+        if target is None or not isinstance(target, str) or not target.strip():
+            return None
+        new_tag = fields_in.get("new_tag")
+        if not isinstance(new_tag, str) or new_tag.strip().lower() not in ALLOWED_ROLE_TAGS:
+            return None
+        fields_out["target"] = target.strip()
+        fields_out["new_tag"] = new_tag.strip().lower()
 
     # qa and ambiguous have no required per-intent fields.
 

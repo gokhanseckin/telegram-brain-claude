@@ -73,6 +73,23 @@ _CANCEL_BY_ID = re.compile(
     re.IGNORECASE,
 )
 
+# Retag rule: only fires on explicit hex-ref + tag combos.
+# Name-based retag ("Doğa personal") needs LLM — too ambiguous at regex level.
+_VALID_TAGS = {
+    "client", "prospect", "supplier", "partner", "internal",
+    "friend", "family", "personal", "ignore",
+}
+_TAG_VOCAB_RE = "(?:" + "|".join(sorted(_VALID_TAGS)) + ")"
+
+_RETAG_TAG_FIRST = re.compile(
+    rf"^{_TAG}\s+(?P<new_tag>{_TAG_VOCAB_RE})$",
+    re.IGNORECASE,
+)
+_RETAG_NEWTAG_FIRST = re.compile(
+    rf"^(?P<new_tag>{_TAG_VOCAB_RE})\s+{_TAG}$",
+    re.IGNORECASE,
+)
+
 
 def _classify_sentiment(raw: str) -> str | None:
     """Map a matched sentiment phrase to a canonical feedback_type.
@@ -126,6 +143,19 @@ def match_rule(text: str) -> RouterDecision | None:
             source="rule",
             fields={"commitment_id": int(m.group("cid")), "reason": reason or None},
         )
+
+    for pat in (_RETAG_TAG_FIRST, _RETAG_NEWTAG_FIRST):
+        m = pat.match(stripped)
+        if m:
+            return RouterDecision(
+                intent="retag",
+                confidence=1.0,
+                source="rule",
+                fields={
+                    "target": m.group("ref").lower(),
+                    "new_tag": m.group("new_tag").lower(),
+                },
+            )
 
     for pattern in (_TAG_FIRST, _SENTIMENT_FIRST):
         m = pattern.match(stripped)

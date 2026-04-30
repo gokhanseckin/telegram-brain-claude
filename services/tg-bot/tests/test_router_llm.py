@@ -146,6 +146,41 @@ def test_validate_confidence_clamped():
     assert d2.confidence == 0.0
 
 
+def test_validate_retag_valid():
+    d = _v({
+        "intent": "retag", "confidence": 0.9,
+        "fields": {"target": "Doğa", "new_tag": "personal"},
+    })
+    assert d is not None
+    assert d.intent == "retag"
+    assert d.fields["target"] == "Doğa"
+    assert d.fields["new_tag"] == "personal"
+
+
+def test_validate_retag_missing_target_rejected():
+    d = _v({
+        "intent": "retag", "confidence": 0.9,
+        "fields": {"new_tag": "personal"},
+    })
+    assert d is None
+
+
+def test_validate_retag_invalid_tag_rejected():
+    d = _v({
+        "intent": "retag", "confidence": 0.9,
+        "fields": {"target": "Doğa", "new_tag": "notarole"},
+    })
+    assert d is None
+
+
+def test_validate_retag_empty_target_rejected():
+    d = _v({
+        "intent": "retag", "confidence": 0.9,
+        "fields": {"target": "   ", "new_tag": "personal"},
+    })
+    assert d is None
+
+
 def test_validate_confidence_non_numeric_rejected():
     d = _v({"intent": "qa", "confidence": "high", "fields": {}})
     assert d is None

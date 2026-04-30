@@ -39,11 +39,15 @@ Intents:
   to an open commitment ("move X to next Friday", "add a note: waiting on Bob").
 - qa: user is asking a question that needs to look at chat history,
   signals, or relationships. Anything that needs a real answer.
+- retag: user wants to change the role/tag of a chat. Extract:
+  * target — chat name, username, or hex ref (without #)
+  * new_tag — one of: client, prospect, supplier, partner, internal,
+    friend, family, personal, ignore
+  Only classify as retag when both a clear target and a valid new_tag
+  are present. If the target is ambiguous or new_tag is not in the list,
+  use ambiguous.
 - ambiguous: you genuinely cannot tell, OR the message contains
-  multiple actions of different types, OR the user is correcting a
-  chat's role/tag (e.g. "Doğa is personal, not internal" — that's a
-  retag request and the system has no retag intent yet, so classify it
-  as ambiguous so the user gets asked to use a different mechanism).
+  multiple actions of different types, OR the retag target is unclear.
   When in doubt, choose ambiguous.
 
 Output schema (return ONLY this JSON, no prose, no markdown fences):
@@ -55,7 +59,9 @@ Output schema (return ONLY this JSON, no prose, no markdown fences):
     "feedback_type": "useful|not_useful|missed_important",  // feedback only
     "item_ref": "<4-8 hex chars without #>",                // feedback only, optional
     "note": "<verbatim user phrasing>",                     // optional
-    "query": "<keywords for matching the commitment>"       // commitment_* only
+    "query": "<keywords for matching the commitment>",      // commitment_* only
+    "target": "<chat name or hex ref>",                     // retag only
+    "new_tag": "<one of the valid role tags>"               // retag only
   }
 }
 
@@ -74,8 +80,17 @@ User: "#ab12 not useful, just smalltalk"
 User: "you missed the Acme thing"
 {"intent":"feedback","confidence":0.85,"reason":"reporting a missed brief item, no tag","fields":{"feedback_type":"missed_important","note":"missed the Acme thing"}}
 
+User: "Doğa is personal"
+{"intent":"retag","confidence":0.9,"reason":"clear name + tag","fields":{"target":"Doğa","new_tag":"personal"}}
+
+User: "#86ab personal"
+{"intent":"retag","confidence":0.95,"reason":"hex ref + tag","fields":{"target":"86ab","new_tag":"personal"}}
+
 User: "#ab12 Doğa is personal, not internal"
-{"intent":"ambiguous","confidence":0.4,"reason":"chat-tag correction, not brief feedback — brief_feedback table doesn't model retagging"}
+{"intent":"retag","confidence":0.85,"reason":"explicit retag with context","fields":{"target":"ab12","new_tag":"personal"}}
+
+User: "Doğa'yı personal olarak işaretle"
+{"intent":"retag","confidence":0.85,"reason":"Turkish: mark Doğa as personal","fields":{"target":"Doğa","new_tag":"personal"}}
 
 User: "done with the report to Bob"
 {"intent":"commitment_resolve","confidence":0.9,"reason":"explicit completion","fields":{"query":"report Bob"}}
@@ -109,6 +124,9 @@ User: "I sent the report and also paid Bob"
 
 User: "ok"
 {"intent":"ambiguous","confidence":0.2,"reason":"too short to classify"}
+
+User: "that chat should be different"
+{"intent":"ambiguous","confidence":0.25,"reason":"retag intent but no clear target or tag"}
 
 Now classify the user message. Return ONLY the JSON.
 """

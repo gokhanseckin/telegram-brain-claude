@@ -71,9 +71,35 @@ Three distinct tag systems, three different purposes — easy to confuse, import
 |---|---|---|---|
 | `#xxxx` | At the end of "💡 Worth Noticing" bullets in the brief. 4-char hex (e.g. `#a8ce`). | A specific **radar alert / brief item**. Minted by `worker-radar`. | `/feedback #xxxx <type>` to calibrate future briefs. |
 | `(c<id>)` | At the end of "✅ On Your Plate" / "🔔 Waiting on Others" bullets in the brief. Integer with `c` prefix (e.g. `(c42)`). | A specific **commitment** row. The integer is the database primary key. | `/done c<id>` or `/cancel c<id>` to mark complete or drop. |
-| Role tag | Per-chat metadata on the `chats` table. One of `client / prospect / supplier / partner / internal / friend / family / personal / ignore`. | The **role this counterparty plays**. | `/tag`, `/ignore`, the auto-tagger, and brief routing logic. **Not yet** addressable by DM — see roadmap. |
+| Role tag | Per-chat metadata on the `chats` table. One of `client / prospect / supplier / partner / internal / friend / family / personal / ignore`. | The **role this counterparty plays**. | `/tag`, `/ignore`, the auto-tagger, brief routing logic, and DM retag (see below). |
 
-**These are NOT interchangeable.** A DM like "Doğa is personal" is a *role-tag correction* on the `chats.tag` column. It is **not** brief feedback (`#xxxx`) and **not** a commitment action (`(c<id>)`). Until the planned `retag` intent ships, the bot treats role-tag DMs as ambiguous and asks you to rephrase.
+**These are NOT interchangeable.** A DM like "Doğa is personal" is a *role-tag correction* on the `chats.tag` column — a `retag` intent. It is **not** brief feedback (`#xxxx`) and **not** a commitment action (`(c<id>)`).
+
+### Retag a chat via DM
+
+You can correct a chat's role tag by DM. Three syntax forms, all going through the same retag executor:
+
+**By hex ref** (rule path, instant — no LLM):
+```
+#86ab personal
+personal #86ab
+```
+
+**By name** (LLM path — Qwen classifies the intent, ~10-25s):
+```
+Doğa is personal
+Doğa Kaya personal, not internal
+```
+
+The bot searches for the chat title, then echoes back for confirmation:
+```
+Retag 'Doğa Kaya' (chat 999) as personal? Reply OK or NO.
+```
+- **OK** → writes `chats.tag = personal`, `tag_locked = true`, `tag_source = 'manual'`.
+- **NO** → cancels, no changes.
+- Any other message → dismisses the pending retag silently.
+
+If the name matches multiple chats, the bot lists the top 5 and asks you to narrow down. If no chat matches, you get "No chat matching '…' found."
 
 ## DM routing
 
@@ -91,11 +117,13 @@ DM
  │     • #xxxx <sentiment> / <sentiment> #xxxx  → write brief_feedback
  │     • done|finished|completed c<id> [note]   → resolve_commitment
  │     • cancel|drop|forget c<id> [reason]      → cancel_commitment
+ │     • #xxxx <role-tag> / <role-tag> #xxxx    → retag (echo-back confirm)
  │  no match
  ▼
 [3] Qwen 2.5 3B (Ollama, format=json) ──► classify intent + extract fields
  │     │
  │     ▼ intent ∈ {feedback}        → local executor   (~10-25s, no Claude)
+ │     ▼ intent = retag             → retag executor   (~10-25s, no Claude)
  │     ▼ intent = ambiguous         → "rephrase" reply (no Claude)
  │     ▼ intent ∈ {qa, commitment_*  → fall through    (Claude, see below)
  │       without explicit c<id>}
@@ -109,7 +137,7 @@ DM
 
 **Local Qwen 2.5 3B** (Ollama on the VPS, no network):
 - Classifies intent on free-text DMs that the rule path didn't catch.
-- Extracts fields (`feedback_type`, `item_ref`, `note`, `query`).
+- Extracts fields (`feedback_type`, `item_ref`, `note`, `query`, `target`, `new_tag`).
 - Schema-validated output. Failure modes (parse error, unknown intent, low confidence) all collapse to `ambiguous` — **never** escalate to Claude.
 - Cost: free. Latency: ~10-25s on CPU (varies with model warm/cold and contention).
 

@@ -5,6 +5,7 @@ user DM**. The handler enforces this by code shape:
   rule match -> exec_feedback,         ask() never called
   llm intent=feedback -> exec_feedback, ask() never called
   llm intent=ambiguous -> apology,     ask() never called
+  llm intent=retag -> exec_retag,      ask() never called
   llm intent=qa or commitment_*       -> ask() called exactly once
 
 These tests assert that property by mocking `ask` + `llm_classify` and
@@ -32,6 +33,15 @@ def _make_message(text: str, message_id: int = 1, user_id: int = OWNER_ID) -> As
     msg.bot.send_chat_action = AsyncMock()
     msg.answer = AsyncMock()
     return msg
+
+
+def _make_state() -> AsyncMock:
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={})
+    state.update_data = AsyncMock()
+    state.set_state = AsyncMock()
+    state.clear = AsyncMock()
+    return state
 
 
 @pytest.fixture(autouse=True)
@@ -67,6 +77,7 @@ async def test_rule_match_writes_row_and_does_not_call_claude():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("#abcd useful")
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="should never be called")
     mock_exec = AsyncMock(return_value="Recorded: useful on #abcd (id=1).")
@@ -78,7 +89,7 @@ async def test_rule_match_writes_row_and_does_not_call_claude():
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
         patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 0, "Claude must not be called on rule match"
     assert mock_llm.call_count == 0, "LLM must not be called on rule match"
@@ -96,6 +107,7 @@ async def test_llm_classifies_feedback_no_claude_call():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("#a8ce Doğa is not a prospect, he is a friend")
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="should never be called")
     mock_exec = AsyncMock(return_value="Recorded: not_useful on #a8ce")
@@ -112,7 +124,7 @@ async def test_llm_classifies_feedback_no_claude_call():
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
         patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_llm.call_count == 1
     assert mock_exec.call_count == 1
@@ -125,6 +137,7 @@ async def test_llm_classifies_qa_falls_through_to_claude():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("what did Alice say last week?")
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="Last Tuesday Alice said …")
     mock_exec = AsyncMock()
@@ -136,7 +149,7 @@ async def test_llm_classifies_qa_falls_through_to_claude():
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
         patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_llm.call_count == 1
     assert mock_ask.call_count == 1, "Claude must be called exactly once for qa"
@@ -151,6 +164,7 @@ async def test_llm_classifies_commitment_falls_through_to_claude():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("done with the report to Bob")
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="Marked done: #42 — send report to Bob.")
     mock_exec = AsyncMock()
@@ -162,7 +176,7 @@ async def test_llm_classifies_commitment_falls_through_to_claude():
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
         patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 1
     assert mock_exec.call_count == 0
@@ -176,6 +190,7 @@ async def test_llm_ambiguous_does_not_call_claude():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("forget about it")
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="should never be called")
     mock_exec = AsyncMock()
@@ -189,7 +204,7 @@ async def test_llm_ambiguous_does_not_call_claude():
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
         patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 0, "must NOT escalate ambiguous to Claude"
     assert mock_exec.call_count == 0
@@ -205,6 +220,7 @@ async def test_rule_done_c_id_dispatches_to_resolve_executor():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("done c42 sent today", message_id=1234)
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="should never be called")
     mock_llm = AsyncMock(return_value=_decision("qa"))
@@ -220,7 +236,7 @@ async def test_rule_done_c_id_dispatches_to_resolve_executor():
         patch("tbc_bot.handlers.chat.exec_commitment_cancel", mock_cancel),
         patch("tbc_bot.handlers.chat.exec_feedback", mock_feedback),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 0, "Claude must not be called on rule shortcut"
     assert mock_llm.call_count == 0, "LLM must not be called on rule shortcut"
@@ -240,6 +256,7 @@ async def test_rule_cancel_c_id_dispatches_to_cancel_executor():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("cancel c7")
+    state = _make_state()
 
     mock_ask = AsyncMock()
     mock_llm = AsyncMock()
@@ -255,7 +272,7 @@ async def test_rule_cancel_c_id_dispatches_to_cancel_executor():
         patch("tbc_bot.handlers.chat.exec_commitment_cancel", mock_cancel),
         patch("tbc_bot.handlers.chat.exec_feedback", mock_feedback),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 0
     assert mock_llm.call_count == 0
@@ -272,6 +289,7 @@ async def test_commitment_lookup_failed_replies_user_no_claude():
     from tbc_bot.router.executors import CommitmentLookupFailed
 
     msg = _make_message("done c99999")
+    state = _make_state()
 
     mock_ask = AsyncMock()
     mock_resolve = AsyncMock(side_effect=CommitmentLookupFailed("No commitment c99999 found."))
@@ -284,7 +302,7 @@ async def test_commitment_lookup_failed_replies_user_no_claude():
         patch("tbc_bot.handlers.chat.exec_commitment_cancel", AsyncMock()),
         patch("tbc_bot.handlers.chat.exec_feedback", AsyncMock()),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 0
     msg.answer.assert_called_once()
@@ -301,6 +319,7 @@ async def test_llm_commitment_intent_without_id_falls_through_to_claude():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("I sent the report to Bob")
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="Marked done: #42 — send report to Bob.")
     mock_llm = AsyncMock(return_value=_decision(
@@ -317,7 +336,7 @@ async def test_llm_commitment_intent_without_id_falls_through_to_claude():
         patch("tbc_bot.handlers.chat.exec_commitment_cancel", mock_cancel),
         patch("tbc_bot.handlers.chat.exec_feedback", AsyncMock()),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     # LLM-source commitments without `commitment_id` go to Claude.
     assert mock_resolve.call_count == 0
@@ -331,6 +350,7 @@ async def test_rule_match_executor_failure_does_not_silently_invoke_claude():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("#abcd useful")
+    state = _make_state()
 
     mock_ask = AsyncMock(return_value="should never be called")
     mock_exec = AsyncMock(side_effect=RuntimeError("db down"))
@@ -342,7 +362,7 @@ async def test_rule_match_executor_failure_does_not_silently_invoke_claude():
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
         patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 0, "must NOT escalate to Claude on executor failure"
     assert mock_llm.call_count == 0, "must NOT call LLM after rule match either"
@@ -357,6 +377,7 @@ async def test_non_owner_message_ignored():
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("#abcd useful", user_id=999)
+    state = _make_state()
 
     mock_ask = AsyncMock()
     mock_exec = AsyncMock()
@@ -368,9 +389,222 @@ async def test_non_owner_message_ignored():
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
         patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
-        await handle_text(msg)
+        await handle_text(msg, state)
 
     assert mock_ask.call_count == 0
     assert mock_exec.call_count == 0
     assert mock_llm.call_count == 0
     msg.answer.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Retag tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_retag_zero_matches_replies_not_found():
+    from tbc_bot.handlers.chat import handle_text
+    from tbc_bot.router.executors import RetagSearchOutcome
+
+    msg = _make_message("Doğa personal")
+    state = _make_state()
+
+    mock_ask = AsyncMock()
+    mock_llm = AsyncMock(return_value=_decision("retag", target="Doğa", new_tag="personal"))
+    mock_search = AsyncMock(return_value=RetagSearchOutcome(
+        kind="zero", new_tag="personal",
+    ))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_retag_search", mock_search),
+    ):
+        await handle_text(msg, state)
+
+    assert mock_ask.call_count == 0
+    msg.answer.assert_called_once()
+    assert "No chat" in msg.answer.call_args[0][0]
+    state.set_state.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_retag_one_match_enters_fsm():
+    from tbc_bot.handlers.chat import RetagState, handle_text
+    from tbc_bot.router.executors import RetagSearchOutcome
+
+    msg = _make_message("Doğa personal")
+    state = _make_state()
+
+    mock_ask = AsyncMock()
+    mock_llm = AsyncMock(return_value=_decision("retag", target="Doğa", new_tag="personal"))
+    mock_search = AsyncMock(return_value=RetagSearchOutcome(
+        kind="one", chat_id=999, title="Doğa Kaya", new_tag="personal",
+    ))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_retag_search", mock_search),
+    ):
+        await handle_text(msg, state)
+
+    assert mock_ask.call_count == 0
+    state.set_state.assert_called_once_with(RetagState.confirming)
+    state.update_data.assert_called_once()
+    call_kwargs = state.update_data.call_args.kwargs
+    assert call_kwargs["retag_chat_id"] == 999
+    assert call_kwargs["retag_new_tag"] == "personal"
+    msg.answer.assert_called_once()
+    reply = msg.answer.call_args[0][0]
+    assert "OK" in reply and "NO" in reply
+
+
+@pytest.mark.asyncio
+async def test_retag_many_matches_shows_disambiguation():
+    from tbc_bot.handlers.chat import handle_text
+    from tbc_bot.router.executors import RetagSearchOutcome
+
+    msg = _make_message("Doğa personal")
+    state = _make_state()
+
+    mock_ask = AsyncMock()
+    mock_llm = AsyncMock(return_value=_decision("retag", target="Doğa", new_tag="personal"))
+    mock_search = AsyncMock(return_value=RetagSearchOutcome(
+        kind="many", new_tag="personal",
+        candidates=[(1, "Doğa A"), (2, "Doğa B")],
+    ))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_retag_search", mock_search),
+    ):
+        await handle_text(msg, state)
+
+    assert mock_ask.call_count == 0
+    state.set_state.assert_not_called()
+    msg.answer.assert_called_once()
+    reply = msg.answer.call_args[0][0]
+    assert "2 chats" in reply
+    assert "Doğa A" in reply
+
+
+@pytest.mark.asyncio
+async def test_retag_confirm_ok_applies_retag():
+    from tbc_bot.handlers.chat import handle_retag_confirm
+
+    msg = _make_message("OK")
+    state = _make_state()
+    state.get_data = AsyncMock(return_value={
+        "retag_chat_id": 999, "retag_title": "Doğa Kaya", "retag_new_tag": "personal",
+    })
+    mock_apply = AsyncMock(return_value="Retagged 'Doğa Kaya' (chat 999) as personal.")
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.exec_retag_apply", mock_apply),
+    ):
+        await handle_retag_confirm(msg, state)
+
+    mock_apply.assert_called_once_with(999, "personal")
+    state.clear.assert_called_once()
+    msg.answer.assert_called_once()
+    assert "Retagged" in msg.answer.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_retag_confirm_no_clears_state():
+    from tbc_bot.handlers.chat import handle_retag_confirm
+
+    msg = _make_message("NO")
+    state = _make_state()
+    state.get_data = AsyncMock(return_value={
+        "retag_chat_id": 999, "retag_title": "X", "retag_new_tag": "personal",
+    })
+    mock_apply = AsyncMock()
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.exec_retag_apply", mock_apply),
+    ):
+        await handle_retag_confirm(msg, state)
+
+    mock_apply.assert_not_called()
+    state.clear.assert_called_once()
+    assert "cancelled" in msg.answer.call_args[0][0].lower()
+
+
+@pytest.mark.asyncio
+async def test_retag_confirm_other_text_dismisses():
+    from tbc_bot.handlers.chat import handle_retag_confirm
+
+    msg = _make_message("maybe later")
+    state = _make_state()
+    state.get_data = AsyncMock(return_value={
+        "retag_chat_id": 999, "retag_title": "X", "retag_new_tag": "personal",
+    })
+
+    with patch("tbc_bot.handlers.chat.is_owner", return_value=True):
+        await handle_retag_confirm(msg, state)
+
+    state.clear.assert_called_once()
+    assert "dismissed" in msg.answer.call_args[0][0].lower()
+
+
+@pytest.mark.asyncio
+async def test_retag_rule_path_no_claude_no_llm():
+    """`#86ab personal` is a rule match. Must not call LLM or Claude."""
+    from tbc_bot.handlers.chat import handle_text
+    from tbc_bot.router.executors import RetagSearchOutcome
+
+    msg = _make_message("#86ab personal")
+    state = _make_state()
+
+    mock_ask = AsyncMock()
+    mock_llm = AsyncMock()
+    mock_search = AsyncMock(return_value=RetagSearchOutcome(
+        kind="one", chat_id=555, title="Acme Corp", new_tag="personal",
+    ))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_retag_search", mock_search),
+    ):
+        await handle_text(msg, state)
+
+    assert mock_llm.call_count == 0, "LLM must not be called on rule match"
+    assert mock_ask.call_count == 0, "Claude must not be called on rule match"
+    mock_search.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_retag_does_not_call_claude():
+    """LLM-classified retag must dispatch locally — no Claude call."""
+    from tbc_bot.handlers.chat import handle_text
+    from tbc_bot.router.executors import RetagSearchOutcome
+
+    msg = _make_message("Doğa is personal")
+    state = _make_state()
+
+    mock_ask = AsyncMock()
+    mock_llm = AsyncMock(return_value=_decision("retag", target="Doğa", new_tag="personal"))
+    mock_search = AsyncMock(return_value=RetagSearchOutcome(
+        kind="one", chat_id=123, title="Doğa", new_tag="personal",
+    ))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_retag_search", mock_search),
+    ):
+        await handle_text(msg, state)
+
+    assert mock_ask.call_count == 0, "Claude must not be called for retag"
