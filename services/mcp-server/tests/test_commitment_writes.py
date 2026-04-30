@@ -115,3 +115,35 @@ def test_get_commitments_respects_limit(session):
 
     found = get_commitments(session, status="open", limit=3)
     assert len(found) == 3
+
+
+def test_get_commitments_ids_lookup(session):
+    """`ids=[...]` direct-lookup path — used for `c<id>` references."""
+    a = _seed(session, source_message_id=300, description="alpha task")
+    b = _seed(session, source_message_id=301, description="beta task")
+    _seed(session, source_message_id=302, description="gamma task")
+
+    found = get_commitments(session, ids=[a.id, b.id])
+    assert {c.id for c in found} == {a.id, b.id}
+
+    # Single id works too.
+    found_one = get_commitments(session, ids=[a.id])
+    assert [c.id for c in found_one] == [a.id]
+
+    # Unknown id returns empty (no error).
+    assert get_commitments(session, ids=[999_999]) == []
+
+
+def test_get_commitments_ids_combines_with_status(session):
+    """ids + status both apply — caller can scope the lookup."""
+    open_c = _seed(session, source_message_id=310, description="open one")
+    done_c = _seed(session, source_message_id=311, description="done one")
+    resolve_commitment(session, commitment_id=done_c.id)
+
+    # ids alone returns both regardless of status
+    both = get_commitments(session, ids=[open_c.id, done_c.id])
+    assert {c.id for c in both} == {open_c.id, done_c.id}
+
+    # ids + status="open" filters to just the open one
+    only_open = get_commitments(session, ids=[open_c.id, done_c.id], status="open")
+    assert [c.id for c in only_open] == [open_c.id]

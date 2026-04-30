@@ -57,6 +57,7 @@ def get_commitments(
     chat_id: int | None = None,
     overdue_only: bool = False,
     query: str | None = None,
+    ids: list[int] | None = None,
     limit: int = 50,
 ) -> list[CommitmentResult]:
     """Query commitments table with optional filters.
@@ -65,10 +66,17 @@ def get_commitments(
     can find the right commitment from natural-language hints like "report" or
     "67.05". Without it, the user has hundreds of open commitments and the
     model would have to load all of them into context.
+
+    `ids` is the direct-lookup path — the brief renders each commitment as
+    `(c<id>)`, so the user can refer to one by id. When set, all other
+    description-style filters are still respected so the caller can scope
+    the lookup if needed.
     """
     stmt = select(Commitment)
     filters = []
 
+    if ids:
+        filters.append(Commitment.id.in_(ids))
     if status:
         filters.append(Commitment.status == status)
     if owner:
