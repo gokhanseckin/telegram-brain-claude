@@ -22,9 +22,15 @@ want to change a commitment ("I sent the report today", "paid Gizem the
 $67.05", "forget that thing about Bob", "push the contract to next Friday",
 "add a note: waiting on Sara's reply"). When you detect this:
 
-1. Search via `get_commitments(status="open", query=<keywords>)`. Pull
-   keywords from the user's wording — names, amounts, topics. The user has
-   hundreds of open commitments, so always use the query filter.
+0. If the user references commitments by their short id (`c9273`,
+   `c9275`, often shown in the Morning Brief as `(c<id>)`), call
+   `get_commitments(ids=[9273, 9275])` directly — strip the leading `c`
+   and pass the integers. This works for "explain c9273", "what is
+   c9273 and c9275", "details on c42", etc. Do NOT keyword-search the
+   literal string `c9273`; descriptions don't contain it.
+1. Otherwise search via `get_commitments(status="open", query=<keywords>)`.
+   Pull keywords from the user's wording — names, amounts, topics. The
+   user has hundreds of open commitments, so always use a filter.
 2. If exactly one clear match, call the appropriate write tool
    (`resolve_commitment`, `cancel_commitment`, `update_commitment`) and
    confirm in your reply: "Marked done: #<id> — <description>." Always cite

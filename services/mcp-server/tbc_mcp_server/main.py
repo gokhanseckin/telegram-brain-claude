@@ -173,14 +173,24 @@ async def handle_list_tools() -> list[Tool]:
             name="get_commitments",
             description=(
                 "Query tracked commitments (promises made or received). "
-                "Use the `query` field for natural-language matching when the "
-                "user mentions a commitment by topic ('the report', '67.05', "
-                "'Bob') — the user has hundreds of open commitments, do not "
-                "load them all."
+                "Use `ids` for direct lookup when the user references one or "
+                "more commitments by their `c<id>` short tag (the brief and "
+                "/done /cancel shortcuts surface these). Use `query` for "
+                "natural-language matching when the user mentions a topic "
+                "instead ('the report', '67.05', 'Bob'). The user has "
+                "hundreds of open commitments, never load them all."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": (
+                            "Direct lookup by commitment id. Pass the integer "
+                            "after the `c` prefix (e.g. `c9273` -> 9273)."
+                        ),
+                    },
                     "status": {
                         "type": "string",
                         "enum": ["open", "done", "cancelled", "stale"],
@@ -450,6 +460,7 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
     elif name == "get_commitments":
         commitments = get_commitments(
             db,
+            ids=args.get("ids"),
             status=args.get("status"),
             owner=args.get("owner"),
             chat_id=args.get("chat_id"),
