@@ -6,13 +6,15 @@ from datetime import date as date_cls
 
 import structlog
 from sqlalchemy.orm import Session
-from tbc_common.db.models import BriefFeedback
+from tbc_common.db.models import ALLOWED_FEEDBACK_TYPES, BriefFeedback
 
 from ..models import BriefFeedbackResult
 
 log = structlog.get_logger(__name__)
 
-ALLOWED_FEEDBACK_TYPES = ("useful", "not_useful", "missed_important")
+# Re-exported for backward compatibility — callers can keep importing
+# `from tbc_mcp_server.tools.feedback import ALLOWED_FEEDBACK_TYPES`.
+__all__ = ["ALLOWED_FEEDBACK_TYPES", "InvalidFeedbackType", "write_brief_feedback"]
 
 
 class InvalidFeedbackType(ValueError):
