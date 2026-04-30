@@ -199,6 +199,133 @@ async def test_llm_ambiguous_does_not_call_claude():
 
 
 @pytest.mark.asyncio
+async def test_rule_done_c_id_dispatches_to_resolve_executor():
+    """`done c42` rule match must dispatch to exec_commitment_resolve and
+    NOT call Claude or the LLM classifier."""
+    from tbc_bot.handlers.chat import handle_text
+
+    msg = _make_message("done c42 sent today", message_id=1234)
+
+    mock_ask = AsyncMock(return_value="should never be called")
+    mock_llm = AsyncMock(return_value=_decision("qa"))
+    mock_resolve = AsyncMock(return_value="Marked done: c42 — Send the report")
+    mock_cancel = AsyncMock()
+    mock_feedback = AsyncMock()
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_commitment_resolve", mock_resolve),
+        patch("tbc_bot.handlers.chat.exec_commitment_cancel", mock_cancel),
+        patch("tbc_bot.handlers.chat.exec_feedback", mock_feedback),
+    ):
+        await handle_text(msg)
+
+    assert mock_ask.call_count == 0, "Claude must not be called on rule shortcut"
+    assert mock_llm.call_count == 0, "LLM must not be called on rule shortcut"
+    assert mock_resolve.call_count == 1
+    assert mock_cancel.call_count == 0
+    assert mock_feedback.call_count == 0
+    decision = mock_resolve.call_args.args[0]
+    assert decision.intent == "commitment_resolve"
+    assert decision.fields["commitment_id"] == 42
+    assert decision.fields["note"] == "sent today"
+    # source_message_id surfaced as kwarg
+    assert mock_resolve.call_args.kwargs["source_message_id"] == 1234
+
+
+@pytest.mark.asyncio
+async def test_rule_cancel_c_id_dispatches_to_cancel_executor():
+    from tbc_bot.handlers.chat import handle_text
+
+    msg = _make_message("cancel c7")
+
+    mock_ask = AsyncMock()
+    mock_llm = AsyncMock()
+    mock_resolve = AsyncMock()
+    mock_cancel = AsyncMock(return_value="Cancelled: c7 — follow up with vendor")
+    mock_feedback = AsyncMock()
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_commitment_resolve", mock_resolve),
+        patch("tbc_bot.handlers.chat.exec_commitment_cancel", mock_cancel),
+        patch("tbc_bot.handlers.chat.exec_feedback", mock_feedback),
+    ):
+        await handle_text(msg)
+
+    assert mock_ask.call_count == 0
+    assert mock_llm.call_count == 0
+    assert mock_resolve.call_count == 0
+    assert mock_cancel.call_count == 1
+    assert mock_feedback.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_commitment_lookup_failed_replies_user_no_claude():
+    """Unknown commitment id must NOT silently fall through to Claude.
+    User gets a clear "no commitment found" reply."""
+    from tbc_bot.handlers.chat import handle_text
+    from tbc_bot.router.executors import CommitmentLookupFailed
+
+    msg = _make_message("done c99999")
+
+    mock_ask = AsyncMock()
+    mock_resolve = AsyncMock(side_effect=CommitmentLookupFailed("No commitment c99999 found."))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", AsyncMock()),
+        patch("tbc_bot.handlers.chat.exec_commitment_resolve", mock_resolve),
+        patch("tbc_bot.handlers.chat.exec_commitment_cancel", AsyncMock()),
+        patch("tbc_bot.handlers.chat.exec_feedback", AsyncMock()),
+    ):
+        await handle_text(msg)
+
+    assert mock_ask.call_count == 0
+    msg.answer.assert_called_once()
+    reply = msg.answer.call_args[0][0]
+    assert "c99999" in reply
+    assert "No commitment" in reply or "not found" in reply.lower()
+
+
+@pytest.mark.asyncio
+async def test_llm_commitment_intent_without_id_falls_through_to_claude():
+    """An LLM-classified commitment_resolve from free-text ("I sent the
+    report") has no commitment_id in fields. Must fall through to Claude
+    so the agent can use MCP get_commitments to find the right row."""
+    from tbc_bot.handlers.chat import handle_text
+
+    msg = _make_message("I sent the report to Bob")
+
+    mock_ask = AsyncMock(return_value="Marked done: #42 — send report to Bob.")
+    mock_llm = AsyncMock(return_value=_decision(
+        "commitment_resolve", query="report Bob"  # query, not commitment_id
+    ))
+    mock_resolve = AsyncMock()
+    mock_cancel = AsyncMock()
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+        patch("tbc_bot.handlers.chat.exec_commitment_resolve", mock_resolve),
+        patch("tbc_bot.handlers.chat.exec_commitment_cancel", mock_cancel),
+        patch("tbc_bot.handlers.chat.exec_feedback", AsyncMock()),
+    ):
+        await handle_text(msg)
+
+    # LLM-source commitments without `commitment_id` go to Claude.
+    assert mock_resolve.call_count == 0
+    assert mock_cancel.call_count == 0
+    assert mock_ask.call_count == 1
+
+
+@pytest.mark.asyncio
 async def test_rule_match_executor_failure_does_not_silently_invoke_claude():
     """Rule matched but executor raises — apologise, do NOT escalate."""
     from tbc_bot.handlers.chat import handle_text

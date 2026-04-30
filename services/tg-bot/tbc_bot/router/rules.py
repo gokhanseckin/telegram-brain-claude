@@ -53,6 +53,26 @@ _SENTIMENT_FIRST = re.compile(
     re.IGNORECASE,
 )
 
+# Commitment shortcut patterns: free-text equivalents of /done c<id> and
+# /cancel c<id>. The `c` prefix on the id is required to disambiguate
+# from an open-ended "done with Bob" which we want to leave to Claude
+# (no explicit id → no rule match → LLM/Claude path).
+#
+# Verbs accepted:
+#   done / finished / completed / resolved   → commitment_resolve
+#   cancel / cancelled / drop / forget       → commitment_cancel
+_RESOLVE_VERBS = r"(?:done|finished|completed|resolved)"
+_CANCEL_VERBS = r"(?:cancel(?:led|led)?|drop|forget)"
+
+_DONE_BY_ID = re.compile(
+    rf"^{_RESOLVE_VERBS}\s+c(?P<cid>\d+)(?:\s+(?P<rest>.+))?$",
+    re.IGNORECASE,
+)
+_CANCEL_BY_ID = re.compile(
+    rf"^{_CANCEL_VERBS}\s+c(?P<cid>\d+)(?:\s+(?P<rest>.+))?$",
+    re.IGNORECASE,
+)
+
 
 def _classify_sentiment(raw: str) -> str | None:
     """Map a matched sentiment phrase to a canonical feedback_type.
@@ -82,6 +102,30 @@ def match_rule(text: str) -> RouterDecision | None:
     stripped = text.strip().rstrip(".")
     if not stripped:
         return None
+
+    # Commitment shortcuts get checked first — they have an unambiguous
+    # `c<digits>` token and there's no overlap with the feedback patterns
+    # (which require a hex `#xxxx` ref or a sentiment word).
+    m = _DONE_BY_ID.match(stripped)
+    if m:
+        rest = m.group("rest")
+        note = rest.strip() if rest else None
+        return RouterDecision(
+            intent="commitment_resolve",
+            confidence=1.0,
+            source="rule",
+            fields={"commitment_id": int(m.group("cid")), "note": note or None},
+        )
+    m = _CANCEL_BY_ID.match(stripped)
+    if m:
+        rest = m.group("rest")
+        reason = rest.strip() if rest else None
+        return RouterDecision(
+            intent="commitment_cancel",
+            confidence=1.0,
+            source="rule",
+            fields={"commitment_id": int(m.group("cid")), "reason": reason or None},
+        )
 
     for pattern in (_TAG_FIRST, _SENTIMENT_FIRST):
         m = pattern.match(stripped)

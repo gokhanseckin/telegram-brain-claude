@@ -102,20 +102,30 @@ What it does:
 Free-text DMs go through a 3-stage router before reaching Claude:
 
 ```
-DM → [1] regex rules        → exec_feedback           (sub-second, ~most #xxxx <sentiment> cases)
+DM → [1] regex rules        → exec_feedback / exec_commitment_*   (sub-second)
        │ no match
        ▼
      [2] Qwen 2.5 3B (Ollama, format=json)
        │ schema-validated + confidence ≥ 0.7
        ▼
-     intent ∈ {feedback}     → exec_feedback          (~3-5s, free-text reactions like the Doğa case)
-     intent = ambiguous      → ask user to rephrase   (no Claude)
-     intent ∈ {qa, commitment_*} → ask() → Claude     (1 call, existing path)
+     intent = feedback          → exec_feedback              (~3-5s, free-text reactions)
+     intent = ambiguous         → ask user to rephrase       (no Claude)
+     intent ∈ {qa, commitment_*}→ ask() → Claude             (1 call, existing path)
 ```
+
+The rule path now also catches **commitment shortcuts** keyed off the `(c<id>)` tag rendered in the brief:
+
+| You DM | Path | Bot does |
+|---|---|---|
+| `/done c42 sent today` | slash | resolve_commitment(42, note="sent today") → "Marked done: c42 — …" |
+| `/cancel c7 no longer needed` | slash | cancel_commitment(7, reason=…) |
+| `done c42 sent today` | rules | same as above, no Claude |
+| `cancel c7` | rules | same as above |
+| `I sent the report` (no id) | qwen → claude | unchanged — Claude uses MCP get_commitments to find the row |
 
 **At most one Claude call per DM.** The router never auto-retries through Claude on a Qwen failure — schema mismatch, low confidence, or Ollama outage all collapse to "rephrase" rather than escalating. Verify with `journalctl -u tbc-bot | grep claude_called`.
 
-Slash commands (`/feedback`, `/brief`, `/ignore`, etc.) bypass the router entirely.
+Slash commands (`/feedback`, `/done`, `/cancel`, `/brief`, `/ignore`, etc.) bypass the router entirely.
 
 ## Commitment management via DM
 
