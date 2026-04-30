@@ -114,8 +114,8 @@ def test_batch_api_called():
                 mock_time.monotonic.side_effect = [0, 100]  # won't timeout
                 mock_time.sleep = MagicMock()
 
-                from tbc_worker_weekly.sender import call_batch_api
-                result = call_batch_api("weekly input text", date(2026, 4, 22))
+                from tbc_worker_weekly.sender import _call_anthropic_batch
+                result = _call_anthropic_batch("weekly input text", date(2026, 4, 22))
 
         assert result == "Weekly review text"
 

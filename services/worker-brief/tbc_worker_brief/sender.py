@@ -18,15 +18,23 @@ from tbc_common.prompts import BRIEF_SYSTEM
 log = structlog.get_logger(__name__)
 
 
-def call_anthropic(cached_context: str, fresh_input: str) -> str:
-    """Call Anthropic API with prompt caching. Returns the brief text."""
+def call_llm(cached_context: str, fresh_input: str) -> str:
+    """Call the configured LLM provider. Returns the brief text."""
+    provider = settings.llm_provider
+    if provider == "deepseek":
+        return _call_deepseek(cached_context, fresh_input)
+    if provider == "anthropic":
+        return _call_anthropic(cached_context, fresh_input)
+    raise ValueError(f"Unknown LLM provider: {provider!r}")
+
+
+def _call_anthropic(cached_context: str, fresh_input: str) -> str:
+    """Anthropic path with prompt caching."""
     api_key = settings.anthropic_api_key
     if api_key is None:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
     client = Anthropic(api_key=api_key.get_secret_value())
-
-    cached_system_text = BRIEF_SYSTEM
 
     response = client.messages.create(
         model=settings.brief_model,
@@ -34,7 +42,7 @@ def call_anthropic(cached_context: str, fresh_input: str) -> str:
         system=[
             {
                 "type": "text",
-                "text": cached_system_text,
+                "text": BRIEF_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             },
         ],
@@ -57,6 +65,29 @@ def call_anthropic(cached_context: str, fresh_input: str) -> str:
     )
 
     return cast(TextBlock, response.content[0]).text
+
+
+def _call_deepseek(cached_context: str, fresh_input: str) -> str:
+    """DeepSeek path via OpenAI-compatible API. No prompt caching."""
+    from openai import OpenAI
+
+    api_key = settings.deepseek_api_key
+    if api_key is None:
+        raise RuntimeError("DEEPSEEK_API_KEY is not set")
+
+    client = OpenAI(
+        api_key=api_key.get_secret_value(),
+        base_url="https://api.deepseek.com",
+    )
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        max_tokens=2000,
+        messages=[
+            {"role": "system", "content": BRIEF_SYSTEM},
+            {"role": "user", "content": f"{cached_context}\n\n{fresh_input}"},
+        ],
+    )
+    return response.choices[0].message.content or ""
 
 
 TELEGRAM_LIMIT = 4096

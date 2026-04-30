@@ -54,8 +54,8 @@ def test_cached_block_contains_system_prompt():
             mock_settings.anthropic_api_key.get_secret_value.return_value = "test-key"
             mock_settings.brief_model = "claude-sonnet-4-6"
 
-            from tbc_worker_brief.sender import call_anthropic
-            call_anthropic(cached_context, "fresh input")
+            from tbc_worker_brief.sender import _call_anthropic
+            _call_anthropic(cached_context, "fresh input")
 
         call_kwargs = mock_client.messages.create.call_args
         system_blocks = call_kwargs.kwargs["system"]
@@ -84,8 +84,8 @@ def test_cache_control_on_stable_block():
             mock_settings.anthropic_api_key.get_secret_value.return_value = "test-key"
             mock_settings.brief_model = "claude-sonnet-4-6"
 
-            from tbc_worker_brief.sender import call_anthropic
-            call_anthropic(cached_context, "fresh input")
+            from tbc_worker_brief.sender import _call_anthropic
+            _call_anthropic(cached_context, "fresh input")
 
         call_kwargs = mock_client.messages.create.call_args
         messages = call_kwargs.kwargs["messages"]
@@ -114,8 +114,8 @@ def test_fresh_block_has_no_cache_control():
             mock_settings.anthropic_api_key.get_secret_value.return_value = "test-key"
             mock_settings.brief_model = "claude-sonnet-4-6"
 
-            from tbc_worker_brief.sender import call_anthropic
-            call_anthropic(cached_context, "fresh data today")
+            from tbc_worker_brief.sender import _call_anthropic
+            _call_anthropic(cached_context, "fresh data today")
 
         call_kwargs = mock_client.messages.create.call_args
         messages = call_kwargs.kwargs["messages"]

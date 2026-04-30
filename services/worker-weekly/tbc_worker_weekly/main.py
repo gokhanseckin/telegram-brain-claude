@@ -13,7 +13,7 @@ from tbc_common.db.session import get_sessionmaker
 from tbc_common.logging import configure_logging
 
 from tbc_worker_weekly.assembler import build_weekly_input, monday_of_week
-from tbc_worker_weekly.sender import call_batch_api, post_to_telegram, save_weekly
+from tbc_worker_weekly.sender import call_llm, post_to_telegram, save_weekly
 
 log = structlog.get_logger(__name__)
 
@@ -40,7 +40,7 @@ def run_weekly() -> None:
 
     with session_factory() as session:
         weekly_input = build_weekly_input(session)
-        weekly_text = call_batch_api(weekly_input, today)
+        weekly_text = call_llm(weekly_input, today)
         log.info("weekly_generated", length=len(weekly_text))
 
         post_to_telegram(weekly_text)
@@ -68,8 +68,10 @@ def main() -> None:
     configure_logging("worker-weekly")
     log.info("worker_weekly_starting")
 
-    if settings.anthropic_api_key is None:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    if settings.llm_provider == "anthropic" and settings.anthropic_api_key is None:
+        raise RuntimeError("ANTHROPIC_API_KEY is required when TBC_LLM_PROVIDER=anthropic")
+    if settings.llm_provider == "deepseek" and settings.deepseek_api_key is None:
+        raise RuntimeError("DEEPSEEK_API_KEY is required when TBC_LLM_PROVIDER=deepseek")
 
     parts = settings.weekly_time.split(":")
     if len(parts) != 2 or not all(p.isdigit() for p in parts):
