@@ -181,6 +181,7 @@ async def cmd_help(message: Message) -> None:
         "/listtags — list active tags with AI guidance\n"
         "/newtag — create a new tag (FSM)\n"
         "/edittag — edit an existing tag (FSM)\n"
+        "/retag — re-tag a chat (FSM, supports name/@username/#ref)\n"
         "/feedback — give feedback on a brief item\n"
         "/done c<id> [note] — mark commitment done\n"
         "/cancel c<id> [reason] — cancel a commitment "
