@@ -14,7 +14,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from tbc_common.config import settings
 from tbc_common.db.models import ChatSummary
-from tbc_common.prompts import WEEKLY_SYSTEM
 
 log = structlog.get_logger(__name__)
 
@@ -22,17 +21,17 @@ BATCH_POLL_INTERVAL = 60  # seconds
 BATCH_TIMEOUT = 600  # seconds (10 minutes)
 
 
-def call_llm(weekly_input: str, today: date) -> str:
+def call_llm(weekly_input: str, today: date, *, system_prompt: str) -> str:
     """Call the configured LLM provider. Returns the weekly review text."""
     provider = settings.llm_provider
     if provider == "deepseek":
-        return _call_deepseek(weekly_input)
+        return _call_deepseek(weekly_input, system_prompt=system_prompt)
     if provider == "anthropic":
-        return _call_anthropic_batch(weekly_input, today)
+        return _call_anthropic_batch(weekly_input, today, system_prompt=system_prompt)
     raise ValueError(f"Unknown LLM provider: {provider!r}")
 
 
-def _call_anthropic_batch(weekly_input: str, today: date) -> str:
+def _call_anthropic_batch(weekly_input: str, today: date, *, system_prompt: str) -> str:
     """Anthropic Batch API path with polling."""
     api_key = settings.anthropic_api_key
     if api_key is None:
@@ -47,7 +46,7 @@ def _call_anthropic_batch(weekly_input: str, today: date) -> str:
                 "params": {
                     "model": settings.brief_model,
                     "max_tokens": 4000,
-                    "system": WEEKLY_SYSTEM,
+                    "system": system_prompt,
                     "messages": [{"role": "user", "content": weekly_input}],
                 },
             }
@@ -79,7 +78,7 @@ def _call_anthropic_batch(weekly_input: str, today: date) -> str:
     return cast(BetaTextBlock, result.result.message.content[0]).text
 
 
-def _call_deepseek(weekly_input: str) -> str:
+def _call_deepseek(weekly_input: str, *, system_prompt: str) -> str:
     """DeepSeek path via OpenAI-compatible API."""
     from openai import OpenAI
 
@@ -95,7 +94,7 @@ def _call_deepseek(weekly_input: str) -> str:
         model="deepseek-chat",
         max_tokens=4000,
         messages=[
-            {"role": "system", "content": WEEKLY_SYSTEM},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": weekly_input},
         ],
     )

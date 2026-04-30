@@ -14,7 +14,8 @@ import structlog
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from tbc_common.config import settings
-from tbc_common.db.models import Chat, Message
+from tbc_common.db.models import Chat, Message, Tag
+from tbc_common.db.tags import get_active_tags
 
 from tbc_worker_chat_tagger.centroids import (
     ClassificationResult,
@@ -22,7 +23,7 @@ from tbc_worker_chat_tagger.centroids import (
     build_tag_centroids,
     chat_centroid,
 )
-from tbc_worker_chat_tagger.prompts import CHAT_TAGGER_SYSTEM, build_user_prompt
+from tbc_worker_chat_tagger.prompts import build_tagger_system_prompt, build_user_prompt
 
 log = structlog.get_logger(__name__)
 
@@ -86,12 +87,6 @@ def _parse_llm_json(raw: str) -> dict[str, Any] | None:
 
 # --- Stage B: Ollama call ---
 
-VALID_TAGS = {
-    "client", "prospect", "supplier", "partner", "internal",
-    "friend", "family", "personal", "ignore",
-}
-
-
 async def _ollama_chat(system: str, user: str) -> str:
     async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(
@@ -146,7 +141,10 @@ def _gather_examples(
 
 
 async def _classify_with_llm(
-    session: Session, chat: Chat
+    session: Session,
+    chat: Chat,
+    tags: list[Tag],
+    valid_names: set[str],
 ) -> TagDecision | None:
     target = _gather_messages(session, chat.chat_id, limit=20)
     if not target:
@@ -157,8 +155,9 @@ async def _classify_with_llm(
         target_messages=target,
         examples=examples,
     )
+    system_prompt = build_tagger_system_prompt(tags)
     try:
-        raw = await _ollama_chat(CHAT_TAGGER_SYSTEM, user_prompt)
+        raw = await _ollama_chat(system_prompt, user_prompt)
     except Exception:
         log.exception("ollama_chat_failed", chat_id=chat.chat_id)
         return None
@@ -168,7 +167,7 @@ async def _classify_with_llm(
         log.warning("malformed_llm_json", chat_id=chat.chat_id, raw=raw[:200])
         return None
     tag = parsed["tag"]
-    if tag not in VALID_TAGS:
+    if tag not in valid_names:
         log.warning("invalid_tag_from_llm", chat_id=chat.chat_id, tag=tag)
         return None
     confidence = float(parsed.get("confidence", 0.5))
@@ -318,6 +317,8 @@ def run_once(session: Session) -> dict[str, int]:
     import time as _time
 
     counters = {"considered": 0, "tagged_a": 0, "tagged_b": 0, "skipped": 0}
+    tags = get_active_tags(session)
+    valid_names = {t.name for t in tags}
     tag_centroids = build_tag_centroids(session, settings.tagger_sample_size)
     all_candidates = candidate_chats(session)
     cap = settings.tagger_max_per_run
@@ -352,7 +353,7 @@ def run_once(session: Session) -> dict[str, int]:
         else:
             # Stage B: LLM fallback (handles small / unembedded chats)
             try:
-                decision = asyncio.run(_classify_with_llm(session, chat))
+                decision = asyncio.run(_classify_with_llm(session, chat, tags, valid_names))
             except Exception:
                 log.exception("llm_classification_failed", chat_id=chat.chat_id)
                 decision = None

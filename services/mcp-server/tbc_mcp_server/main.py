@@ -36,6 +36,7 @@ from .tools.feedback import InvalidFeedbackType, write_brief_feedback
 from .tools.relationship import get_relationship_state
 from .tools.search import search_messages, semantic_search
 from .tools.signals import get_signals
+from .tools.tags import create_tag, list_tags, update_tag
 
 configure_logging("mcp-server")
 log = structlog.get_logger(__name__)
@@ -386,6 +387,79 @@ async def handle_list_tools() -> list[Tool]:
                 },
             },
         ),
+        Tool(
+            name="create_tag",
+            description=(
+                "Create a new chat-classification tag. "
+                "Name must be lowercase alphanumeric + underscore, max 30 chars, and unique. "
+                "The tag is created as non-system (user-defined) with sort_order=100."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Tag identifier, e.g. 'vip_client' — lowercase alphanumeric + underscore, max 30 chars.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Human-readable description of what this tag means.",
+                    },
+                    "analysis_guidance": {
+                        "type": "string",
+                        "description": "Optional guidance for the LLM when analysing chats with this tag.",
+                    },
+                },
+                "required": ["name", "description"],
+            },
+        ),
+        Tool(
+            name="update_tag",
+            description=(
+                "Partially update an existing tag. "
+                "Fetch by name; raises an error if the tag does not exist. "
+                "Only the supplied fields are changed."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the tag to update.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New description (omit to leave unchanged).",
+                    },
+                    "analysis_guidance": {
+                        "type": "string",
+                        "description": "New analysis guidance (omit to leave unchanged).",
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "description": "Set to false to deactivate the tag (omit to leave unchanged).",
+                    },
+                },
+                "required": ["name"],
+            },
+        ),
+        Tool(
+            name="list_tags",
+            description=(
+                "List all chat-classification tags with their description, "
+                "analysis_guidance, and active status."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "include_inactive": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Set to true to include inactive/deactivated tags.",
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -542,6 +616,38 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
         date_filter = date.fromisoformat(args["date"]) if args.get("date") else None
         brief = get_recent_brief(db, date_filter=date_filter)
         return brief.model_dump()
+
+    elif name == "create_tag":
+        try:
+            tag_result = create_tag(
+                db,
+                name=args["name"],
+                description=args["description"],
+                analysis_guidance=args.get("analysis_guidance"),
+            )
+        except ValueError as exc:
+            return {"error": str(exc)}
+        return {"message": tag_result}
+
+    elif name == "update_tag":
+        try:
+            tag_result = update_tag(
+                db,
+                name=args["name"],
+                description=args.get("description"),
+                analysis_guidance=args.get("analysis_guidance"),
+                is_active=args.get("is_active"),
+            )
+        except ValueError as exc:
+            return {"error": str(exc)}
+        return {"message": tag_result}
+
+    elif name == "list_tags":
+        tag_result = list_tags(
+            db,
+            include_inactive=args.get("include_inactive", False),
+        )
+        return {"tags": tag_result}
 
     else:
         raise ValueError(f"Unknown tool: {name}")

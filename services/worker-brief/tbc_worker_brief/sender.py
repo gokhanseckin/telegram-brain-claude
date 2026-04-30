@@ -13,22 +13,21 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from tbc_common.config import settings
 from tbc_common.db.models import ChatSummary, RadarAlert
-from tbc_common.prompts import BRIEF_SYSTEM
 
 log = structlog.get_logger(__name__)
 
 
-def call_llm(cached_context: str, fresh_input: str) -> str:
+def call_llm(cached_context: str, fresh_input: str, *, system_prompt: str) -> str:
     """Call the configured LLM provider. Returns the brief text."""
     provider = settings.llm_provider
     if provider == "deepseek":
-        return _call_deepseek(cached_context, fresh_input)
+        return _call_deepseek(cached_context, fresh_input, system_prompt=system_prompt)
     if provider == "anthropic":
-        return _call_anthropic(cached_context, fresh_input)
+        return _call_anthropic(cached_context, fresh_input, system_prompt=system_prompt)
     raise ValueError(f"Unknown LLM provider: {provider!r}")
 
 
-def _call_anthropic(cached_context: str, fresh_input: str) -> str:
+def _call_anthropic(cached_context: str, fresh_input: str, *, system_prompt: str) -> str:
     """Anthropic path with prompt caching."""
     api_key = settings.anthropic_api_key
     if api_key is None:
@@ -42,7 +41,7 @@ def _call_anthropic(cached_context: str, fresh_input: str) -> str:
         system=[
             {
                 "type": "text",
-                "text": BRIEF_SYSTEM,
+                "text": system_prompt,
                 "cache_control": {"type": "ephemeral"},
             },
         ],
@@ -67,7 +66,7 @@ def _call_anthropic(cached_context: str, fresh_input: str) -> str:
     return cast(TextBlock, response.content[0]).text
 
 
-def _call_deepseek(cached_context: str, fresh_input: str) -> str:
+def _call_deepseek(cached_context: str, fresh_input: str, *, system_prompt: str) -> str:
     """DeepSeek path via OpenAI-compatible API. No prompt caching."""
     from openai import OpenAI
 
@@ -83,7 +82,7 @@ def _call_deepseek(cached_context: str, fresh_input: str) -> str:
         model="deepseek-chat",
         max_tokens=2000,
         messages=[
-            {"role": "system", "content": BRIEF_SYSTEM},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"{cached_context}\n\n{fresh_input}"},
         ],
     )

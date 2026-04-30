@@ -10,7 +10,9 @@ import structlog
 from apscheduler.schedulers.background import BackgroundScheduler
 from tbc_common.config import settings
 from tbc_common.db.session import get_sessionmaker
+from tbc_common.db.tags import get_active_tags
 from tbc_common.logging import configure_logging
+from tbc_common.prompts.brief import build_brief_system
 
 from tbc_worker_brief.assembler import build_cached_context, build_fresh_input
 from tbc_worker_brief.sender import call_llm, post_to_telegram, save_brief, stamp_radar_alerts
@@ -27,10 +29,12 @@ def run_brief() -> None:
     today = date.today()
 
     with session_factory() as session:
+        tags = get_active_tags(session)
+        system_prompt = build_brief_system(tags)
         cached_context = build_cached_context(session)
         fresh_input, alert_ids = build_fresh_input(session)
 
-        brief_text = call_llm(cached_context, fresh_input)
+        brief_text = call_llm(cached_context, fresh_input, system_prompt=system_prompt)
         log.info("brief_generated", length=len(brief_text))
 
         post_to_telegram(brief_text)

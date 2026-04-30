@@ -12,7 +12,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from tbc_common.db.models import Message, MessageUnderstanding
-from tbc_common.prompts import MODEL_VERSION, UNDERSTANDING_SYSTEM
+from tbc_common.prompts import MODEL_VERSION
 
 from .ollama_client import OllamaClient
 from .schema import UnderstandingOutput
@@ -109,6 +109,8 @@ async def process_message(
     ollama: OllamaClient,
     understanding_model: str,
     embedding_model: str,
+    *,
+    system_prompt: str,
 ) -> None:
     """Run the understanding + embedding pipeline and persist results."""
 
@@ -136,7 +138,7 @@ async def process_message(
     # --- 2. Call understanding model ---
     raw_content = await ollama.chat(
         model=understanding_model,
-        system=UNDERSTANDING_SYSTEM,
+        system=system_prompt,
         user=user_input,
     )
 

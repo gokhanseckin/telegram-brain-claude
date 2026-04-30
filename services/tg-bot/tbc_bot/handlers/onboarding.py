@@ -27,6 +27,7 @@ from tbc_common.config import settings
 from tbc_common.db.models import Chat
 from tbc_common.db.models import Message as TgMessage
 from tbc_common.db.session import get_sessionmaker
+from tbc_common.db.tags import get_active_tags
 
 from tbc_bot.guards import is_owner
 
@@ -34,32 +35,26 @@ log = structlog.get_logger(__name__)
 
 router = Router(name="onboarding")
 
-TAGS = [
-    "client",
-    "prospect",
-    "supplier",
-    "partner",
-    "internal",
-    "friend",
-    "family",
-    "personal",
-    "ignore",
-    "skip",
-]
-
 
 class OnboardingState(StatesGroup):
     tagging = State()
     noting = State()
 
 
-def _tag_keyboard() -> InlineKeyboardMarkup:
+def _tag_keyboard(tag_names: list[str]) -> InlineKeyboardMarkup:
     buttons = [
         InlineKeyboardButton(text=t.capitalize(), callback_data=f"tag:{t}")
-        for t in TAGS
+        for t in tag_names
     ]
     rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _load_tag_names() -> list[str]:
+    sm = get_sessionmaker()
+    with sm() as session:
+        tags = get_active_tags(session)
+    return [t.name for t in tags] + ["skip"]
 
 
 def _load_chats(session: Session) -> list[Chat]:
@@ -127,7 +122,8 @@ async def _send_next_chat(trigger: Message | CallbackQuery, state: FSMContext) -
     await state.set_state(OnboardingState.tagging)
 
     if target_msg:
-        await target_msg.answer(text, reply_markup=_tag_keyboard(), parse_mode=None)
+        tag_names = _load_tag_names()
+        await target_msg.answer(text, reply_markup=_tag_keyboard(tag_names), parse_mode=None)
 
 
 async def _start_onboarding(message: Message, state: FSMContext) -> None:

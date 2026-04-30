@@ -15,7 +15,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from tbc_common.config import settings
 from tbc_common.logging import configure_logging
 
-from tbc_bot.handlers import chat, commands, commitments, feedback, onboarding
+from tbc_bot.handlers import chat, commands, commitments, feedback, onboarding, tags
 
 log = structlog.get_logger(__name__)
 
@@ -40,6 +40,7 @@ async def main() -> None:
     dp = Dispatcher(storage=storage)
 
     # Register routers — chat must be last so commands take priority
+    dp.include_router(tags.router)
     dp.include_router(onboarding.router)
     dp.include_router(feedback.router)
     dp.include_router(commitments.router)

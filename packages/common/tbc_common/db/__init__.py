@@ -16,6 +16,7 @@ from tbc_common.db.models import (
     RadarAlert,
     RelationshipState,
     ServiceState,
+    Tag,
     User,
 )
 from tbc_common.db.session import get_engine, get_sessionmaker
@@ -31,6 +32,7 @@ __all__ = [
     "RadarAlert",
     "RelationshipState",
     "ServiceState",
+    "Tag",
     "User",
     "get_engine",
     "get_sessionmaker",

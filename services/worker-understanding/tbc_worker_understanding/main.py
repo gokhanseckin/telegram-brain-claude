@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from tbc_common.config import settings
 from tbc_common.db.models import Message
 from tbc_common.db.session import get_sessionmaker
+from tbc_common.db.tags import get_active_tags
 from tbc_common.logging import configure_logging
 from tbc_common.prompts import MODEL_VERSION
+from tbc_common.prompts.understanding import build_understanding_system
 
 from .ollama_client import OllamaClient
 from .processor import process_message
@@ -51,6 +53,10 @@ async def run_loop() -> None:
     session_factory = get_sessionmaker()
     ollama = OllamaClient(settings.ollama_base_url)
 
+    with session_factory() as session:
+        tags = get_active_tags(session)
+    understanding_prompt = build_understanding_system(tags)
+
     while True:
         with session_factory() as session:
             pending = _poll(session)
@@ -72,6 +78,7 @@ async def run_loop() -> None:
                         ollama=ollama,
                         understanding_model=settings.understanding_model,
                         embedding_model=settings.embedding_model,
+                        system_prompt=understanding_prompt,
                     )
                 except Exception:
                     log.exception(

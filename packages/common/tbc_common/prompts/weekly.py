@@ -1,6 +1,17 @@
-"""Weekly Review system prompt — spec §5.3, verbatim. Batch API."""
+"""Weekly Review system prompt — spec §5.3. Batch API."""
 
-WEEKLY_SYSTEM = """\
+from __future__ import annotations
+
+from tbc_common.db.models import Tag
+from tbc_common.db.tags import render_tag_guidance
+
+
+def build_weekly_system(tags: list[Tag]) -> str:
+    guidance = render_tag_guidance(tags) if tags else ""
+    return _WEEKLY_TEMPLATE.format(tag_guidance=guidance)
+
+
+_WEEKLY_TEMPLATE = """\
 Write the user's Weekly Review. Goals:
 1. Pattern recognition across the week that daily briefs couldn't see.
 2. Honest assessment of where the user's attention went vs where business value is.
@@ -19,4 +30,6 @@ If two clients are circling the same concern, connect them. If the pipeline look
 thin, say so plainly.
 
 Max length: ~6000 chars.
+
+{tag_guidance}
 """

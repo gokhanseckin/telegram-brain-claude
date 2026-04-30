@@ -5,10 +5,15 @@ changes. The understanding worker re-runs on messages whose stored
 `model_version` differs from this constant.
 """
 
-from tbc_common.prompts.brief import BRIEF_SYSTEM
-from tbc_common.prompts.understanding import UNDERSTANDING_SYSTEM
-from tbc_common.prompts.weekly import WEEKLY_SYSTEM
+from tbc_common.prompts.brief import build_brief_system
+from tbc_common.prompts.understanding import build_understanding_system
+from tbc_common.prompts.weekly import build_weekly_system
 
 MODEL_VERSION = "understanding-2026-04-22-v1"
 
-__all__ = ["BRIEF_SYSTEM", "MODEL_VERSION", "UNDERSTANDING_SYSTEM", "WEEKLY_SYSTEM"]
+__all__ = [
+    "MODEL_VERSION",
+    "build_brief_system",
+    "build_understanding_system",
+    "build_weekly_system",
+]

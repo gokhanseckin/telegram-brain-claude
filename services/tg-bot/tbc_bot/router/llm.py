@@ -28,7 +28,6 @@ from tbc_common.config import settings
 from tbc_common.ollama import OllamaClient
 
 from .decision import RouterDecision
-from .prompt import ROUTER_SYSTEM_PROMPT
 
 log = structlog.get_logger(__name__)
 
@@ -42,10 +41,6 @@ ALLOWED_INTENTS = {
     "ambiguous",
 }
 ALLOWED_FEEDBACK_TYPES = {"useful", "not_useful", "missed_important"}
-ALLOWED_ROLE_TAGS = {
-    "client", "prospect", "supplier", "partner", "internal",
-    "friend", "family", "personal", "ignore",
-}
 
 
 def _extract_json_object(raw: str) -> str | None:
@@ -99,7 +94,15 @@ def _parse_llm_json(raw: str) -> dict[str, Any] | None:
             return None
 
 
-def _validate_decision(parsed: dict[str, Any]) -> RouterDecision | None:
+_DEFAULT_VALID_TAGS = {
+    "client", "prospect", "supplier", "partner", "internal",
+    "friend", "family", "personal", "ignore",
+}
+
+
+def _validate_decision(
+    parsed: dict[str, Any], valid_tags: set[str] | None = None
+) -> RouterDecision | None:
     """Apply the schema half of the loop guard.
 
     Returns None if any structural check fails — the caller folds None
@@ -162,7 +165,8 @@ def _validate_decision(parsed: dict[str, Any]) -> RouterDecision | None:
         if target is None or not isinstance(target, str) or not target.strip():
             return None
         new_tag = fields_in.get("new_tag")
-        if not isinstance(new_tag, str) or new_tag.strip().lower() not in ALLOWED_ROLE_TAGS:
+        allowed = valid_tags if valid_tags is not None else _DEFAULT_VALID_TAGS
+        if not isinstance(new_tag, str) or new_tag.strip().lower() not in allowed:
             return None
         fields_out["target"] = target.strip()
         fields_out["new_tag"] = new_tag.strip().lower()
@@ -177,7 +181,13 @@ def _validate_decision(parsed: dict[str, Any]) -> RouterDecision | None:
     )
 
 
-async def classify(text: str, client: OllamaClient | None = None) -> RouterDecision:
+async def classify(
+    text: str,
+    client: OllamaClient | None = None,
+    *,
+    system_prompt: str | None = None,
+    valid_tags: set[str] | None = None,
+) -> RouterDecision:
     """Classify a user DM via the local LLM.
 
     Always returns a RouterDecision. Failure modes (Ollama error,
@@ -186,13 +196,18 @@ async def classify(text: str, client: OllamaClient | None = None) -> RouterDecis
     so the caller has one shape to dispatch on.
 
     `client` is injectable for tests; production callers leave it None.
+    `system_prompt` is built from DB tags by the caller; falls back to
+    the default template when None.
     """
+    from .prompt import build_router_prompt
+
     cli = client if client is not None else OllamaClient(settings.ollama_base_url)
+    prompt = system_prompt if system_prompt is not None else build_router_prompt([])
 
     try:
         raw = await cli.chat(
             model=settings.router_model,
-            system=ROUTER_SYSTEM_PROMPT,
+            system=prompt,
             user=text,
             format="json",
         )
@@ -211,7 +226,7 @@ async def classify(text: str, client: OllamaClient | None = None) -> RouterDecis
             fields={"error": "unparseable_json"},
         )
 
-    decision = _validate_decision(parsed)
+    decision = _validate_decision(parsed, valid_tags=valid_tags)
     if decision is None:
         log.warning(
             "router_llm_schema_mismatch",

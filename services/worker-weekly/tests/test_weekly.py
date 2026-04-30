@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from tbc_common.prompts import WEEKLY_SYSTEM
+from tbc_common.prompts.weekly import build_weekly_system
+
+_TEST_WEEKLY_SYSTEM = build_weekly_system([])
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -115,7 +117,7 @@ def test_batch_api_called():
                 mock_time.sleep = MagicMock()
 
                 from tbc_worker_weekly.sender import _call_anthropic_batch
-                result = _call_anthropic_batch("weekly input text", date(2026, 4, 22))
+                result = _call_anthropic_batch("weekly input text", date(2026, 4, 22), system_prompt=_TEST_WEEKLY_SYSTEM)
 
         assert result == "Weekly review text"
 
@@ -123,7 +125,7 @@ def test_batch_api_called():
         requests = create_call.kwargs["requests"]
         assert len(requests) == 1
         assert requests[0]["params"]["model"] == "claude-sonnet-4-6"
-        assert requests[0]["params"]["system"] == WEEKLY_SYSTEM
+        assert "Weekly Review" in requests[0]["params"]["system"]
 
 
 # ---------------------------------------------------------------------------

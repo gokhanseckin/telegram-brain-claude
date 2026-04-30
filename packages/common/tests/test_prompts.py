@@ -1,11 +1,18 @@
-"""Sanity checks on canonical prompt constants."""
+"""Sanity checks on canonical prompt builders."""
 
 from tbc_common.prompts import (
-    BRIEF_SYSTEM,
     MODEL_VERSION,
-    UNDERSTANDING_SYSTEM,
-    WEEKLY_SYSTEM,
+    build_brief_system,
+    build_understanding_system,
+    build_weekly_system,
 )
+
+# All prompt builders accept a list of Tag objects; tests use [] (the
+# fallback path) since they assert structural properties of the static
+# template, not the dynamic per-tag guidance block.
+BRIEF_SYSTEM = build_brief_system([])
+UNDERSTANDING_SYSTEM = build_understanding_system([])
+WEEKLY_SYSTEM = build_weekly_system([])
 
 
 def test_prompts_are_non_empty() -> None:
