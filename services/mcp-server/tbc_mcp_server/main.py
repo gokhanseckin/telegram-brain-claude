@@ -619,7 +619,7 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
 
     elif name == "create_tag":
         try:
-            result = create_tag(
+            tag_result = create_tag(
                 db,
                 name=args["name"],
                 description=args["description"],
@@ -627,11 +627,11 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
             )
         except ValueError as exc:
             return {"error": str(exc)}
-        return {"message": result}
+        return {"message": tag_result}
 
     elif name == "update_tag":
         try:
-            result = update_tag(
+            tag_result = update_tag(
                 db,
                 name=args["name"],
                 description=args.get("description"),
@@ -640,14 +640,14 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
             )
         except ValueError as exc:
             return {"error": str(exc)}
-        return {"message": result}
+        return {"message": tag_result}
 
     elif name == "list_tags":
-        result = list_tags(
+        tag_result = list_tags(
             db,
             include_inactive=args.get("include_inactive", False),
         )
-        return {"tags": result}
+        return {"tags": tag_result}
 
     else:
         raise ValueError(f"Unknown tool: {name}")
