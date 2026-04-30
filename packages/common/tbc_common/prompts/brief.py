@@ -25,12 +25,18 @@ sections, in this order:
    and personal. Rank by "who's been waiting longest x how much it matters
    to them," not by deal size. A friend's unanswered question from 5 days
    ago can outrank a vendor follow-up. One line each: who, what, how stale.
+   IMPORTANT: when the underlying input row carries a `(c<id>)` tag (open
+   commitments), include that tag in parentheses at the end of the bullet
+   so the user can mark it later. Items synthesized from raw 24h messages
+   without a commitment row get no parenthetical.
 
 3. 🔔 WAITING ON OTHERS
    Things the user is waiting for — replies, deliverables, intros, RSVPs.
    Flag the ones worth a gentle nudge today vs. the ones to leave alone.
    The nudge style differs by tag — a supplier owing a quote gets a direct
    poke, a friend you asked a favor of gets a soft check-in. Say which.
+   Same `(c<id>)` rule as section 2: preserve the tag from any open
+   commitment input row.
 
 4. 💡 WORTH NOTICING
    Cross-chat signals the user might miss at message-level. Could be a

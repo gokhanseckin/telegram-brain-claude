@@ -55,3 +55,11 @@ def test_brief_prompt_dropped_temperature_section() -> None:
     catches an accidental re-introduction."""
     assert "TEMPERATURE CHECK" not in BRIEF_SYSTEM
     assert "🌡️" not in BRIEF_SYSTEM
+
+
+def test_brief_prompt_instructs_short_id_preservation() -> None:
+    """The brief LLM must be told to preserve `(c<id>)` commitment tags
+    inline in ON YOUR PLATE / WAITING ON OTHERS so the user can mark
+    them later. Without this, the rendered (c<id>) on input rows can
+    silently get dropped from the output."""
+    assert "(c<id>)" in BRIEF_SYSTEM

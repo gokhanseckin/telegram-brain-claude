@@ -59,8 +59,8 @@ BRIEF_FORMAT_SPEC = """\
 Brief format spec:
 Output exactly five sections in order:
 1. 🌅 THE SHAPE OF TODAY — one short paragraph; honest tone of the day
-2. ✅ ON YOUR PLATE — others waiting on user; mix work + personal; rank by waiting-time x importance
-3. 🔔 WAITING ON OTHERS — user waiting on others; flag chase-worthy and say HOW to nudge
+2. ✅ ON YOUR PLATE — others waiting on user; mix work + personal; rank by waiting-time x importance. CRITICAL: when an Open Commitments input row carries a `(c<id>)` tag, INCLUDE that tag inline at the end of the bullet so the user can reply later. Format: `• <description>. <context>. (c<id>)`. Drop the tag only for items synthesized from raw 24h messages that have no commitment row.
+3. 🔔 WAITING ON OTHERS — user waiting on others; flag chase-worthy and say HOW to nudge. Same `(c<id>)` rule as #2: preserve the tag from any Open Commitments row.
 4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat. CRITICAL: when the underlying input row carries a `ref=#xxxx` tag (radar alerts), include that tag inline at the END of the bullet so the user can reply with `/feedback #xxxx not_useful "..."`. Format: `• [chat / tag] — <observation>. <suggested response>. (#xxxx)`. Items synthesized from raw 24h messages without a ref tag get no parenthetical.
 5. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
 Note: relationship temperature/state changes are still provided in the
@@ -82,6 +82,29 @@ Recency rules (strict):
   see one, treat it as historical reference, never as today's work.
 Keep total length under 3000 characters to fit a single Telegram message.
 """
+
+
+def render_commitment(c: Commitment, *, now: datetime) -> str:
+    """Render an Open Commitments line for the brief input.
+
+    The trailing `(c<id>)` short-id is the load-bearing UX hook: the
+    LLM is instructed to preserve it inline in ON YOUR PLATE / WAITING
+    ON OTHERS, and the user can later mark a commitment with that
+    handle (today: by talking to Claude / agent; future: a `/done c42`
+    rules-path slash, see queued PR3 work).
+
+    `c` prefix disambiguates from radar's hex `#xxxx` tags.
+    """
+    # Prefer source_sent_at (when the conversation actually happened)
+    # over created_at (when the extractor wrote the row). Fall back to
+    # created_at only if the column hasn't been backfilled yet.
+    anchor = c.source_sent_at or c.created_at
+    anchor = anchor if anchor.tzinfo else anchor.replace(tzinfo=UTC)
+    age_days = (now - anchor).days
+    date_label = anchor.strftime("%Y-%m-%d")
+    date_kind = "from" if c.source_sent_at else "extracted"
+    due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else " (no due date)"
+    return f"- [{date_kind} {date_label}, age={age_days}d]{due} (c{c.id}) {c.description}"
 
 
 def build_cached_context(session: Session) -> str:
@@ -173,16 +196,7 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
     ninety_days_ago = now - timedelta(days=90)
 
     def _render_commit(c: Commitment) -> str:
-        # Prefer source_sent_at (when the conversation actually happened) over
-        # created_at (when the extractor wrote the row). Fall back to created_at
-        # only if the column hasn't been backfilled yet.
-        anchor = c.source_sent_at or c.created_at
-        anchor = anchor if anchor.tzinfo else anchor.replace(tzinfo=UTC)
-        age_days = (now - anchor).days
-        date_label = anchor.strftime("%Y-%m-%d")
-        date_kind = "from" if c.source_sent_at else "extracted"
-        due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else " (no due date)"
-        return f"- [{date_kind} {date_label}, age={age_days}d]{due} {c.description}"
+        return render_commitment(c, now=now)
 
     # Recency filter on the true conversation date when available, falling back
     # to created_at when source_sent_at is unset (e.g. row predates backfill).
