@@ -108,7 +108,7 @@ def db_session(engine):
 
 @pytest.fixture
 def sample_chat(db_session: Session) -> Chat:
-    chat = Chat(chat_id=1001, type="private", title="Test Client", tag="client")
+    chat = Chat(chat_id=1001, type="private", title="Test Prospect", tag="prospect")
     db_session.add(chat)
     db_session.commit()
     return chat

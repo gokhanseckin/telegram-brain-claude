@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from tbc_common.db.models import Tag
 
-_DEFAULT_TAG_NAMES = "client, prospect, supplier, partner, internal, friend, family, personal, ignore"
+_DEFAULT_TAG_NAMES = "prospect, partner, colleague, family, personal, ignore"
 
 
 def build_router_prompt(tags: list[Tag]) -> str:
@@ -39,7 +39,7 @@ Intents:
   short tag like #ab12 or describe something the brief missed. Map their
   reaction to feedback_type:
   * useful — they liked the item or found it valuable
-  * not_useful — noise, already-known, or wrong (e.g. "he is a friend, not a prospect")
+  * not_useful — noise, already-known, or wrong (e.g. "he is personal, not a prospect")
   * missed_important — something the brief should have included
 - commitment_resolve: user says they completed a promise/task ("done with X",
   "I sent the report", "paid Bob").
@@ -97,14 +97,14 @@ User: "Doğa is personal"
 User: "#86ab personal"
 {"intent":"retag","confidence":0.95,"reason":"hex ref + tag","fields":{"target":"86ab","new_tag":"personal"}}
 
-User: "#ab12 Doğa is personal, not internal"
+User: "#ab12 Doğa is personal, not colleague"
 {"intent":"retag","confidence":0.85,"reason":"explicit retag with context","fields":{"target":"ab12","new_tag":"personal"}}
 
-User: "Doğa who is username @unquaLe is friend not internal"
-{"intent":"retag","confidence":0.95,"reason":"name disambiguated by @username","fields":{"target":"unquaLe","new_tag":"friend"}}
+User: "Doğa who is username @unquaLe is personal not colleague"
+{"intent":"retag","confidence":0.95,"reason":"name disambiguated by @username","fields":{"target":"unquaLe","new_tag":"personal"}}
 
-User: "@unquaLe is a friend"
-{"intent":"retag","confidence":0.95,"reason":"username + tag","fields":{"target":"unquaLe","new_tag":"friend"}}
+User: "@unquaLe is personal"
+{"intent":"retag","confidence":0.95,"reason":"username + tag","fields":{"target":"unquaLe","new_tag":"personal"}}
 
 User: "Doğa'yı personal olarak işaretle"
 {"intent":"retag","confidence":0.85,"reason":"Turkish: mark Doğa as personal","fields":{"target":"Doğa","new_tag":"personal"}}
