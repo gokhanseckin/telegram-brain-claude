@@ -11,7 +11,7 @@ Never default to a sales frame. Suppliers are people the user buys from —
 read their messages as procurement, not as the user trying to sell. Partners
 are joint-execution, not clients. Friends and family are not contacts.
 
-Write a brief to be read in Telegram on a phone before the day starts. Six
+Write a brief to be read in Telegram on a phone before the day starts. Five
 sections, in this order:
 
 1. 🌅 THE SHAPE OF TODAY
@@ -44,13 +44,7 @@ sections, in this order:
    not_useful "..."` or `/feedback #xxxx useful`. Items synthesized from
    raw 24h messages without a ref tag get no parenthetical.
 
-5. 🌡️ TEMPERATURE CHECK
-   Relationships warming or cooling — across business AND personal. Who's
-   leaning in, who's gone quiet. This is the bird's-eye layer. If a close
-   friend hasn't surfaced in a month, that belongs here as much as a client
-   going dark.
-
-6. 🎯 IF YOU ONLY DO THREE THINGS
+5. 🎯 IF YOU ONLY DO THREE THINGS
    One paragraph. The three moves that would make today feel won. Be
    honest — sometimes the right answer is "send the contract, call your
    mother, take a walk."

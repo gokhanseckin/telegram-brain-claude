@@ -44,7 +44,14 @@ def test_brief_prompt_has_sections() -> None:
         "ON YOUR PLATE",
         "WAITING ON OTHERS",
         "WORTH NOTICING",
-        "TEMPERATURE CHECK",
         "IF YOU ONLY DO THREE THINGS",
     ]:
         assert section in BRIEF_SYSTEM
+
+
+def test_brief_prompt_dropped_temperature_section() -> None:
+    """TEMPERATURE CHECK was removed — relationship cooling/warming gets
+    folded into WORTH NOTICING or ON YOUR PLATE instead. Regression
+    catches an accidental re-introduction."""
+    assert "TEMPERATURE CHECK" not in BRIEF_SYSTEM
+    assert "🌡️" not in BRIEF_SYSTEM

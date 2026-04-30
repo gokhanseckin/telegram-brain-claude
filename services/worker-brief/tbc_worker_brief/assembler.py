@@ -57,13 +57,16 @@ Cross-cutting:
 
 BRIEF_FORMAT_SPEC = """\
 Brief format spec:
-Output exactly six sections in order:
+Output exactly five sections in order:
 1. 🌅 THE SHAPE OF TODAY — one short paragraph; honest tone of the day
 2. ✅ ON YOUR PLATE — others waiting on user; mix work + personal; rank by waiting-time x importance
 3. 🔔 WAITING ON OTHERS — user waiting on others; flag chase-worthy and say HOW to nudge
 4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat. CRITICAL: when the underlying input row carries a `ref=#xxxx` tag (radar alerts), include that tag inline at the END of the bullet so the user can reply with `/feedback #xxxx not_useful "..."`. Format: `• [chat / tag] — <observation>. <suggested response>. (#xxxx)`. Items synthesized from raw 24h messages without a ref tag get no parenthetical.
-5. 🌡️ TEMPERATURE CHECK — warming/cooling relationships across both ledgers
-6. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
+5. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
+Note: relationship temperature/state changes are still provided in the
+input as background context — fold relevant ones into "WORTH NOTICING"
+(if signal-shaped) or "ON YOUR PLATE" (if a nudge is owed). Do NOT
+write a dedicated temperature section.
 Recency rules (strict):
 - The fresh input begins with "Today is YYYY-MM-DD". Anchor every claim
   against that date. Never imply something is "now" or "today" if its
