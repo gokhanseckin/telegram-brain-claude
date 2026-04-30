@@ -14,7 +14,7 @@ import structlog
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-from tbc_common.db.models import BriefFeedback
+from tbc_common.db.models import ALLOWED_FEEDBACK_TYPES, BriefFeedback
 from tbc_common.db.session import get_sessionmaker
 
 from tbc_bot.guards import is_owner
@@ -67,7 +67,7 @@ async def cmd_feedback(message: Message) -> None:
         if ref_m:
             item_ref = ref_m.group("ref").lower()
             ftype_raw = ref_m.group("ftype").lower().replace("-", "_")
-            # Normalise common aliases
+            # Normalise common aliases.
             if ftype_raw in ("not_useful", "notuseful", "no"):
                 feedback_type = "not_useful"
             elif ftype_raw in ("useful", "yes", "good"):
@@ -76,6 +76,21 @@ async def cmd_feedback(message: Message) -> None:
                 feedback_type = "missed_important"
             else:
                 feedback_type = ftype_raw
+            # Reject anything not in the canonical set. Without this gate,
+            # a malformed slash like `/feedback #d3b9 that is irrelevant`
+            # would have ftype_raw="that" and we'd happily INSERT a row
+            # with feedback='that' — junk that pollutes brief calibration
+            # on the next morning.
+            if feedback_type not in ALLOWED_FEEDBACK_TYPES:
+                await message.answer(
+                    f"Unknown feedback type: {ftype_raw!r}.\n"
+                    f"Use one of: {', '.join(ALLOWED_FEEDBACK_TYPES)}\n"
+                    "Aliases: useful=yes/good, not_useful=no, missed_important=missed.\n"
+                    "Examples:\n"
+                    "  /feedback #a7f2 not_useful \"just smalltalk\"\n"
+                    "  /feedback missed \"acme mentioned budget twice\""
+                )
+                return
             note_raw = ref_m.group("note")
             note = note_raw.strip().strip('"') if note_raw else None
         else:

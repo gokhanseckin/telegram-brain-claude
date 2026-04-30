@@ -211,13 +211,24 @@ class ServiceState(Base):
     )
 
 
+# Authoritative set for the brief_feedback.feedback column. Imported by
+# both the /feedback slash handler (tg-bot) and the write_brief_feedback
+# MCP tool so they validate against the same truth. Adding a value here
+# is the only place it should be added.
+ALLOWED_FEEDBACK_TYPES: tuple[str, ...] = (
+    "useful",
+    "not_useful",
+    "missed_important",
+)
+
+
 class BriefFeedback(Base):
     __tablename__ = "brief_feedback"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     brief_date: Mapped[date] = mapped_column(Date, nullable=False)
     item_ref: Mapped[str | None] = mapped_column(Text)  # alert id or commitment id
-    feedback: Mapped[str] = mapped_column(Text, nullable=False)  # useful|not_useful|missed_important
+    feedback: Mapped[str] = mapped_column(Text, nullable=False)  # see ALLOWED_FEEDBACK_TYPES above
     note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

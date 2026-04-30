@@ -143,6 +143,101 @@ async def test_feedback_missed_parsed():
 
 
 # ---------------------------------------------------------------------------
+# /feedback: unknown feedback_type rejected without DB write
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_feedback_unknown_type_rejected():
+    """/feedback #abcd <bogus> ... must reply with usage help and NOT insert.
+
+    Regression: a real-world DM `/feedback #d3b9 that is irrelevant ...`
+    used to silently land a row with feedback='that' because the parser's
+    else-branch accepted any token. Brief calibration query expects one
+    of the canonical values."""
+    from tbc_bot.handlers.feedback import cmd_feedback
+
+    msg = _make_message('/feedback #abcd that is irrelevant. there is no payment issue')
+
+    captured_rows: list = []
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=False)
+    mock_session.add = lambda row: captured_rows.append(row)
+    mock_session.commit = MagicMock()
+    mock_session.refresh = MagicMock()
+    mock_sm = MagicMock(return_value=mock_session)
+
+    with (
+        patch("tbc_bot.handlers.feedback.is_owner", return_value=True),
+        patch("tbc_bot.handlers.feedback.get_sessionmaker", return_value=mock_sm),
+    ):
+        await cmd_feedback(msg)
+
+    # No row written
+    assert captured_rows == []
+    # User got a usage message naming the allowed values
+    msg.answer.assert_called_once()
+    reply = msg.answer.call_args[0][0]
+    assert "useful" in reply
+    assert "missed_important" in reply
+    assert "that" in reply  # quotes the bad token back at the user
+
+
+@pytest.mark.asyncio
+async def test_feedback_useful_alias_resolves():
+    """`/feedback #abcd yes` should still work — `yes` is a useful alias."""
+    from tbc_bot.handlers.feedback import cmd_feedback
+
+    msg = _make_message("/feedback #abcd yes")
+
+    captured_rows: list = []
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=False)
+    mock_session.add = lambda row: captured_rows.append(row)
+    mock_session.commit = MagicMock()
+    mock_session.refresh = MagicMock()
+    mock_sm = MagicMock(return_value=mock_session)
+
+    with (
+        patch("tbc_bot.handlers.feedback.is_owner", return_value=True),
+        patch("tbc_bot.handlers.feedback.get_sessionmaker", return_value=mock_sm),
+    ):
+        await cmd_feedback(msg)
+
+    assert len(captured_rows) == 1
+    assert captured_rows[0].feedback == "useful"
+
+
+@pytest.mark.asyncio
+async def test_feedback_canonical_types_all_valid():
+    """Each canonical value passes through unchanged (no alias mapping)."""
+    from tbc_bot.handlers.feedback import cmd_feedback
+    from tbc_common.db.models import ALLOWED_FEEDBACK_TYPES
+
+    for ft in ALLOWED_FEEDBACK_TYPES:
+        msg = _make_message(f"/feedback #abcd {ft}")
+        captured: list = []
+        mock_session = MagicMock()
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+        mock_session.add = captured.append  # bind once per loop iter, no closure trap
+        mock_session.commit = MagicMock()
+        mock_session.refresh = MagicMock()
+        mock_sm = MagicMock(return_value=mock_session)
+
+        with (
+            patch("tbc_bot.handlers.feedback.is_owner", return_value=True),
+            patch("tbc_bot.handlers.feedback.get_sessionmaker", return_value=mock_sm),
+        ):
+            await cmd_feedback(msg)
+
+        assert len(captured) == 1, f"{ft} should have inserted a row"
+        assert captured[0].feedback == ft
+
+
+# ---------------------------------------------------------------------------
 # /pause — creates /tmp/tbc_pause
 # ---------------------------------------------------------------------------
 
