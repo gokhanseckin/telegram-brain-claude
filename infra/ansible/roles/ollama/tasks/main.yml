@@ -58,6 +58,17 @@
     OLLAMA_HOST: "http://127.0.0.1:11434"
   timeout: 1800   # 30 min — model is ~4 GB
 
+# Smaller / faster model used by the bot DM router for intent
+# classification. 7B is too slow for interactive routing on CPU
+# (~15-20s); 3B targets ~3-5s and the task is narrow enough that the
+# accuracy tradeoff is acceptable.
+- name: Pull Qwen 2.5 3B Instruct Q4_K_M (DM router)
+  command: ollama pull qwen2.5:3b-instruct-q4_K_M
+  when: "'qwen2.5:3b-instruct-q4_K_M' not in ollama_models.stdout"
+  environment:
+    OLLAMA_HOST: "http://127.0.0.1:11434"
+  timeout: 1800   # 30 min — model is ~2 GB
+
 - name: Pull bge-m3 embeddings model
   command: ollama pull bge-m3
   when: "'bge-m3' not in ollama_models.stdout"

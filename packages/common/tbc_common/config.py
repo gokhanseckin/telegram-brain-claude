@@ -88,6 +88,15 @@ class Settings(BaseSettings):
         default=200, validation_alias="TBC_TAGGER_MAX_PER_RUN"
     )
 
+    # DM router (Stage 2 — local-first intent classification)
+    router_model: str = Field(
+        default="qwen2.5:3b-instruct-q4_K_M",
+        validation_alias="TBC_ROUTER_MODEL",
+    )
+    router_min_confidence: float = Field(
+        default=0.7, validation_alias="TBC_ROUTER_MIN_CONFIDENCE"
+    )
+
     # Logging
     log_level: str = Field(default="INFO", validation_alias="TBC_LOG_LEVEL")
 

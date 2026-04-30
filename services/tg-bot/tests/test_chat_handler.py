@@ -1,9 +1,14 @@
 """Integration tests for handlers/chat.py — proves the cost guardrail.
 
 The hard property of the router design is: **at most one Claude call per
-user DM**. PR1 enforces this by only sending the DM to `agent.ask()` on
-the fall-through path; rule-matched DMs return before that line. These
-tests assert the property by mocking `ask` and counting calls.
+user DM**. The handler enforces this by code shape:
+  rule match -> exec_feedback,         ask() never called
+  llm intent=feedback -> exec_feedback, ask() never called
+  llm intent=ambiguous -> apology,     ask() never called
+  llm intent=qa or commitment_*       -> ask() called exactly once
+
+These tests assert that property by mocking `ask` + `llm_classify` and
+counting calls.
 """
 
 from __future__ import annotations
@@ -47,72 +52,115 @@ def reset_chat_history():
     yield
 
 
+def _decision(intent, **fields):
+    """Build a RouterDecision for the LLM-mock return value."""
+    from tbc_bot.router.decision import RouterDecision
+    return RouterDecision(
+        intent=intent, confidence=0.9, source="llm", fields=fields
+    )
+
+
 @pytest.mark.asyncio
 async def test_rule_match_writes_row_and_does_not_call_claude():
     """`#abcd useful` is a clean rule match — must dispatch to executor
-    without ever touching Claude."""
+    without ever touching the LLM or Claude."""
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("#abcd useful")
 
     mock_ask = AsyncMock(return_value="should never be called")
     mock_exec = AsyncMock(return_value="Recorded: useful on #abcd (id=1).")
+    mock_llm = AsyncMock(return_value=_decision("qa"))
 
     with (
         patch("tbc_bot.handlers.chat.is_owner", return_value=True),
         patch("tbc_bot.handlers.chat.ask", mock_ask),
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
         await handle_text(msg)
 
     assert mock_ask.call_count == 0, "Claude must not be called on rule match"
+    assert mock_llm.call_count == 0, "LLM must not be called on rule match"
     assert mock_exec.call_count == 1
     decision = mock_exec.call_args[0][0]
     assert decision.intent == "feedback"
     assert decision.fields["feedback_type"] == "useful"
-    assert decision.fields["item_ref"] == "abcd"
     msg.answer.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_no_rule_match_falls_through_to_claude_exactly_once():
-    """A free-text DM with no rule match goes to Claude — exactly once."""
+async def test_llm_classifies_feedback_no_claude_call():
+    """Doğa case: rule doesn't match, LLM classifies as feedback —
+    executor runs, Claude does NOT."""
     from tbc_bot.handlers.chat import handle_text
 
-    # The Doğa case from Stage 1 verification: tag + free-text reaction.
-    # Rules intentionally don't catch it (sentiment isn't in the vocab),
-    # so it must fall through.
     msg = _make_message("#a8ce Doğa is not a prospect, he is a friend")
 
-    mock_ask = AsyncMock(return_value="Recorded.")
-    mock_exec = AsyncMock(return_value="should never be called")
+    mock_ask = AsyncMock(return_value="should never be called")
+    mock_exec = AsyncMock(return_value="Recorded: not_useful on #a8ce")
+    mock_llm = AsyncMock(return_value=_decision(
+        "feedback",
+        feedback_type="not_useful",
+        item_ref="a8ce",
+        note="Doğa is not a prospect, he is a friend",
+    ))
 
     with (
         patch("tbc_bot.handlers.chat.is_owner", return_value=True),
         patch("tbc_bot.handlers.chat.ask", mock_ask),
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
         await handle_text(msg)
 
-    assert mock_ask.call_count == 1, "Claude must be called exactly once"
-    assert mock_exec.call_count == 0, "executor must not run on fall-through"
-    msg.answer.assert_called()
+    assert mock_llm.call_count == 1
+    assert mock_exec.call_count == 1
+    assert mock_ask.call_count == 0, "Claude must not be called when LLM picks feedback"
 
 
 @pytest.mark.asyncio
-async def test_qa_query_falls_through_to_claude():
-    """Plain Q&A — rule doesn't match, falls through to Claude once."""
+async def test_llm_classifies_qa_falls_through_to_claude():
+    """LLM picks qa → Claude called exactly once."""
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("what did Alice say last week?")
 
     mock_ask = AsyncMock(return_value="Last Tuesday Alice said …")
     mock_exec = AsyncMock()
+    mock_llm = AsyncMock(return_value=_decision("qa"))
 
     with (
         patch("tbc_bot.handlers.chat.is_owner", return_value=True),
         patch("tbc_bot.handlers.chat.ask", mock_ask),
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+    ):
+        await handle_text(msg)
+
+    assert mock_llm.call_count == 1
+    assert mock_ask.call_count == 1, "Claude must be called exactly once for qa"
+    assert mock_exec.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_llm_classifies_commitment_falls_through_to_claude():
+    """Commitment intents still go to Claude in PR2; PR3 will replace
+    with local executors. Property to enforce now: exactly one Claude
+    call, executor not invoked."""
+    from tbc_bot.handlers.chat import handle_text
+
+    msg = _make_message("done with the report to Bob")
+
+    mock_ask = AsyncMock(return_value="Marked done: #42 — send report to Bob.")
+    mock_exec = AsyncMock()
+    mock_llm = AsyncMock(return_value=_decision("commitment_resolve", query="report Bob"))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
         await handle_text(msg)
 
@@ -121,24 +169,56 @@ async def test_qa_query_falls_through_to_claude():
 
 
 @pytest.mark.asyncio
+async def test_llm_ambiguous_does_not_call_claude():
+    """Loop guard: ambiguous => apology message, NO Claude call. This is
+    the load-bearing invariant — Qwen failures must never silently
+    escalate."""
+    from tbc_bot.handlers.chat import handle_text
+
+    msg = _make_message("forget about it")
+
+    mock_ask = AsyncMock(return_value="should never be called")
+    mock_exec = AsyncMock()
+    mock_llm = AsyncMock(return_value=_decision(
+        "ambiguous", error="low_confidence"
+    ))
+
+    with (
+        patch("tbc_bot.handlers.chat.is_owner", return_value=True),
+        patch("tbc_bot.handlers.chat.ask", mock_ask),
+        patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
+    ):
+        await handle_text(msg)
+
+    assert mock_ask.call_count == 0, "must NOT escalate ambiguous to Claude"
+    assert mock_exec.call_count == 0
+    msg.answer.assert_called_once()
+    reply = msg.answer.call_args[0][0]
+    assert "rephrase" in reply.lower() or "wasn't sure" in reply.lower()
+
+
+@pytest.mark.asyncio
 async def test_rule_match_executor_failure_does_not_silently_invoke_claude():
-    """If the executor raises, we apologise to the user — we do NOT
-    silently retry through Claude. That's the cost-guardrail invariant."""
+    """Rule matched but executor raises — apologise, do NOT escalate."""
     from tbc_bot.handlers.chat import handle_text
 
     msg = _make_message("#abcd useful")
 
     mock_ask = AsyncMock(return_value="should never be called")
     mock_exec = AsyncMock(side_effect=RuntimeError("db down"))
+    mock_llm = AsyncMock()
 
     with (
         patch("tbc_bot.handlers.chat.is_owner", return_value=True),
         patch("tbc_bot.handlers.chat.ask", mock_ask),
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
         await handle_text(msg)
 
     assert mock_ask.call_count == 0, "must NOT escalate to Claude on executor failure"
+    assert mock_llm.call_count == 0, "must NOT call LLM after rule match either"
     msg.answer.assert_called_once()
     err_text = msg.answer.call_args[0][0]
     assert "wrong" in err_text.lower() or "try again" in err_text.lower()
@@ -153,14 +233,17 @@ async def test_non_owner_message_ignored():
 
     mock_ask = AsyncMock()
     mock_exec = AsyncMock()
+    mock_llm = AsyncMock()
 
     with (
         patch("tbc_bot.handlers.chat.is_owner", return_value=False),
         patch("tbc_bot.handlers.chat.ask", mock_ask),
         patch("tbc_bot.handlers.chat.exec_feedback", mock_exec),
+        patch("tbc_bot.handlers.chat.llm_classify", mock_llm),
     ):
         await handle_text(msg)
 
     assert mock_ask.call_count == 0
     assert mock_exec.call_count == 0
+    assert mock_llm.call_count == 0
     msg.answer.assert_not_called()

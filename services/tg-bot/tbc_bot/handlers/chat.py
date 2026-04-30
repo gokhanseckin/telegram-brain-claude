@@ -15,6 +15,7 @@ from tbc_bot.agent import ask
 from tbc_bot.guards import is_owner
 from tbc_bot.router import match_rule
 from tbc_bot.router.executors import exec_feedback
+from tbc_bot.router.llm import classify as llm_classify
 
 log = structlog.get_logger(__name__)
 
@@ -52,16 +53,25 @@ async def handle_text(message: Message) -> None:
 
     history = _history[chat_id]
 
-    # Router pre-pass — local-first dispatch. If a rule matches an
-    # action-shaped DM (currently: explicit-sentiment feedback like
-    # "#abcd useful"), the executor writes the row and we return without
-    # ever calling Claude. Anything not matched falls through.
+    # ─── Router pre-pass ────────────────────────────────────────────────
+    # 1) Rules first — strict-vocab regex catches obvious feedback DMs
+    #    sub-second, no LLM, no Claude.
     decision = match_rule(message.text)
-    if decision is not None and decision.intent == "feedback":
+
+    # 2) LLM classifier — Qwen 3B handles free-text reactions, commitments,
+    #    Q&A discrimination. Returns ambiguous on any failure (parse,
+    #    schema, low confidence) so we never silently escalate.
+    if decision is None:
+        decision = await llm_classify(message.text)
+
+    # 3) Dispatch.
+    if decision.intent == "feedback":
         try:
             reply = await exec_feedback(decision)
         except Exception:
-            log.exception("router_executor_error", chat_id=chat_id, intent=decision.intent)
+            log.exception(
+                "router_executor_error", chat_id=chat_id, intent=decision.intent
+            )
             await message.answer("Something went wrong, please try again.")
             return
         history.append({"role": "user", "content": message.text})
@@ -73,13 +83,39 @@ async def handle_text(message: Message) -> None:
             "router_dispatch",
             intent=decision.intent,
             source=decision.source,
+            confidence=decision.confidence,
             claude_called=False,
         )
         return
 
-    # Fall-through: no rule matched. Send to Claude exactly once.
-    # Surface the Telegram message id to the agent so commitment resolutions
-    # can be traced back to the exact DM that triggered them.
+    if decision.intent == "ambiguous":
+        # Loop guard: never escalate to Claude on a failed classification.
+        # Make the user disambiguate instead — that's a fresh DM with a
+        # fresh budget.
+        reply = (
+            "I wasn't sure how to handle that. Could you rephrase? "
+            "For brief feedback try `#xxxx useful` (or not_useful / missed). "
+            "For a question, just ask plainly."
+        )
+        history.append({"role": "user", "content": message.text})
+        history.append({"role": "assistant", "content": reply})
+        if len(history) > _MAX_HISTORY:
+            _history[chat_id] = history[-_MAX_HISTORY:]
+        await message.answer(reply, parse_mode=None)
+        log.info(
+            "router_dispatch",
+            intent="ambiguous",
+            source=decision.source,
+            confidence=decision.confidence,
+            claude_called=False,
+            error=decision.fields.get("error"),
+        )
+        return
+
+    # qa, commitment_resolve, commitment_cancel, commitment_update —
+    # fall through to Claude. PR3 will replace the commitment fall-throughs
+    # with local executors + echo-back; for now Claude handles them
+    # correctly via the existing MCP tools.
     user_text = f"{message.text}\n\n[meta] current_message_id={message.message_id}"
 
     try:
@@ -95,7 +131,13 @@ async def handle_text(message: Message) -> None:
     if len(history) > _MAX_HISTORY:
         _history[chat_id] = history[-_MAX_HISTORY:]
 
-    log.info("router_dispatch", intent="qa", source="fallthrough", claude_called=True)
+    log.info(
+        "router_dispatch",
+        intent=decision.intent,
+        source=decision.source,
+        confidence=decision.confidence,
+        claude_called=True,
+    )
 
     for chunk in _split(reply, 4096):
         await message.answer(chunk, parse_mode=None)

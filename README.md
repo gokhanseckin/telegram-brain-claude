@@ -97,6 +97,26 @@ What it does:
 - The brief LLM uses that to drop similar items, weight missed-pattern feedback higher, and avoid repeating things you've called out as noisy.
 - After ~5-10 events, briefs start feeling personally tuned.
 
+## DM router (local-first)
+
+Free-text DMs go through a 3-stage router before reaching Claude:
+
+```
+DM → [1] regex rules        → exec_feedback           (sub-second, ~most #xxxx <sentiment> cases)
+       │ no match
+       ▼
+     [2] Qwen 2.5 3B (Ollama, format=json)
+       │ schema-validated + confidence ≥ 0.7
+       ▼
+     intent ∈ {feedback}     → exec_feedback          (~3-5s, free-text reactions like the Doğa case)
+     intent = ambiguous      → ask user to rephrase   (no Claude)
+     intent ∈ {qa, commitment_*} → ask() → Claude     (1 call, existing path)
+```
+
+**At most one Claude call per DM.** The router never auto-retries through Claude on a Qwen failure — schema mismatch, low confidence, or Ollama outage all collapse to "rephrase" rather than escalating. Verify with `journalctl -u tbc-bot | grep claude_called`.
+
+Slash commands (`/feedback`, `/brief`, `/ignore`, etc.) bypass the router entirely.
+
 ## Commitment management via DM
 
 Free-text messages to the bot can resolve, cancel, or update tracked commitments. The agent reads your wording, finds the matching open commitment, and writes the change.
