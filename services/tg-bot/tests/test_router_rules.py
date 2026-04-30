@@ -127,6 +127,45 @@ def test_commitment_shortcut_requires_explicit_c_prefix(text):
         assert decision.intent not in ("commitment_resolve", "commitment_cancel")
 
 
+@pytest.mark.parametrize(
+    "text,expected_target,expected_tag",
+    [
+        ("#86ab personal", "86ab", "personal"),
+        ("#ABCD client", "abcd", "client"),
+        ("prospect #1234abcd", "1234abcd", "prospect"),
+        ("#86ab internal", "86ab", "internal"),
+        ("ignore #abcd", "abcd", "ignore"),
+        ("#abcd friend", "abcd", "friend"),
+        ("family #abcd", "abcd", "family"),
+        ("supplier #abcd", "abcd", "supplier"),
+        ("partner #abcd", "abcd", "partner"),
+    ],
+)
+def test_retag_rule_match(text, expected_target, expected_tag):
+    decision = match_rule(text)
+    assert decision is not None, f"expected match for {text!r}"
+    assert decision.intent == "retag"
+    assert decision.confidence == 1.0
+    assert decision.source == "rule"
+    assert decision.fields["target"] == expected_target
+    assert decision.fields["new_tag"] == expected_tag
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Doğa personal",      # name-based, no hex ref — needs LLM
+        "#abcd blah",          # "blah" not a valid tag
+        "personal",            # bare tag word, no ref
+        "#abcd",               # ref without tag
+    ],
+)
+def test_retag_rule_no_match(text):
+    decision = match_rule(text)
+    if decision is not None:
+        assert decision.intent != "retag"
+
+
 def test_note_quotes_stripped():
     decision = match_rule('#abcd not_useful "duplicate of yesterday"')
     assert decision is not None

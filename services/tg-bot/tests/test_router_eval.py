@@ -42,14 +42,32 @@ EVAL: list[tuple[str, dict, str, dict | None]] = [
         "feedback",
         {"feedback_type": "not_useful", "item_ref": "a8ce"},
     ),
-    # --- Ambiguous: chat-tag correction (NOT brief feedback). brief_feedback
-    # table doesn't model retagging; PR3 will add a retag intent. Until
-    # then these must classify as ambiguous so the user gets asked to
-    # rephrase rather than polluting brief calibration.
+    # --- Retag: chat-tag corrections ---
+    (
+        "Doğa is personal",
+        {"intent": "retag", "confidence": 0.9,
+         "fields": {"target": "Doğa", "new_tag": "personal"}},
+        "retag",
+        {"target": "Doğa", "new_tag": "personal"},
+    ),
+    (
+        "#86ab personal",
+        {"intent": "retag", "confidence": 0.95,
+         "fields": {"target": "86ab", "new_tag": "personal"}},
+        "retag",
+        {"target": "86ab", "new_tag": "personal"},
+    ),
     (
         "#a8ce Doğa is personal, not internal",
-        {"intent": "ambiguous", "confidence": 0.4,
-         "reason": "chat-tag correction"},
+        {"intent": "retag", "confidence": 0.85,
+         "fields": {"target": "a8ce", "new_tag": "personal"}},
+        "retag",
+        {"target": "a8ce", "new_tag": "personal"},
+    ),
+    # --- Ambiguous retag: unclear target ---
+    (
+        "that chat should be different",
+        {"intent": "ambiguous", "confidence": 0.25, "fields": {}},
         "ambiguous",
         None,
     ),
@@ -185,4 +203,4 @@ def test_eval_set_size_floor():
     25-30 entries; this is a budget marker."""
     # Slightly below the plan's 25 because we deferred commitment
     # executor coverage to PR3 — bump this in PR3.
-    assert len(EVAL) >= 14
+    assert len(EVAL) >= 17

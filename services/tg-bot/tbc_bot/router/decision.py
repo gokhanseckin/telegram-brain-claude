@@ -14,6 +14,7 @@ Intent = Literal[
     "commitment_cancel",
     "commitment_update",
     "qa",
+    "retag",
     "ambiguous",
 ]
 

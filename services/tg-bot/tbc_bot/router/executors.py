@@ -18,9 +18,12 @@ short, no need for an async driver.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from datetime import date as date_cls
 
 import structlog
+from sqlalchemy import select
 from tbc_common.db.commitments import (
     CommitmentNotFound,
 )
@@ -30,7 +33,7 @@ from tbc_common.db.commitments import (
 from tbc_common.db.commitments import (
     resolve_commitment as _resolve_commitment_db,
 )
-from tbc_common.db.models import BriefFeedback
+from tbc_common.db.models import BriefFeedback, Chat
 from tbc_common.db.session import get_sessionmaker
 
 from .decision import RouterDecision
@@ -163,3 +166,77 @@ async def exec_commitment_cancel(decision: RouterDecision) -> str:
         source=decision.source,
     )
     return f"Cancelled: c{row_id} — {description}"
+
+
+# ---------------------------------------------------------------------------
+# Retag executor (DM-driven chat role-tag correction)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RetagSearchOutcome:
+    kind: str  # "zero", "one", "many"
+    chat_id: int | None = None
+    title: str | None = None
+    new_tag: str = ""
+    candidates: list[tuple[int, str]] = field(default_factory=list)
+
+
+def _search_chat_sync(target: str) -> tuple[int, list[tuple[int, str]]]:
+    sm = get_sessionmaker()
+    with sm() as session:
+        rows = list(
+            session.scalars(
+                select(Chat).where(Chat.title.ilike(f"%{target}%"))
+            ).all()
+        )
+    return len(rows), [(r.chat_id, r.title or f"chat_{r.chat_id}") for r in rows]
+
+
+def _apply_retag_sync(chat_id: int, new_tag: str) -> str:
+    sm = get_sessionmaker()
+    with sm() as session:
+        chat = session.get(Chat, chat_id)
+        if chat is None:
+            raise CommitmentLookupFailed(
+                f"chat {chat_id} vanished between search and update"
+            )
+        chat.tag = new_tag
+        chat.tag_set_at = datetime.now(UTC)
+        chat.tag_source = "manual"
+        chat.tag_locked = True
+        chat.tag_confidence = None
+        chat.tag_reason = None
+        session.commit()
+        return chat.title or f"chat_{chat_id}"
+
+
+async def exec_retag_search(decision: RouterDecision) -> RetagSearchOutcome:
+    target = decision.fields["target"]
+    new_tag = decision.fields["new_tag"]
+    count, pairs = await asyncio.to_thread(_search_chat_sync, target)
+
+    log.info(
+        "router_retag_search",
+        target=target,
+        new_tag=new_tag,
+        match_count=count,
+        source=decision.source,
+    )
+
+    if count == 0:
+        return RetagSearchOutcome(kind="zero", new_tag=new_tag)
+    if count == 1:
+        cid, title = pairs[0]
+        return RetagSearchOutcome(
+            kind="one", chat_id=cid, title=title, new_tag=new_tag
+        )
+    return RetagSearchOutcome(
+        kind="many", new_tag=new_tag, candidates=pairs
+    )
+
+
+async def exec_retag_apply(chat_id: int, new_tag: str) -> str:
+    title = await asyncio.to_thread(_apply_retag_sync, chat_id, new_tag)
+    log.info("router_retag_applied", chat_id=chat_id, new_tag=new_tag)
+    return f"Retagged '{title}' (chat {chat_id}) as {new_tag}."
