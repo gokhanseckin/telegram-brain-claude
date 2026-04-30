@@ -7,7 +7,9 @@ from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from tbc_common.prompts import BRIEF_SYSTEM
+from tbc_common.prompts.brief import build_brief_system
+
+_TEST_BRIEF_SYSTEM = build_brief_system([])
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,12 +57,12 @@ def test_cached_block_contains_system_prompt():
             mock_settings.brief_model = "claude-sonnet-4-6"
 
             from tbc_worker_brief.sender import _call_anthropic
-            _call_anthropic(cached_context, "fresh input")
+            _call_anthropic(cached_context, "fresh input", system_prompt=_TEST_BRIEF_SYSTEM)
 
         call_kwargs = mock_client.messages.create.call_args
         system_blocks = call_kwargs.kwargs["system"]
         system_text = "".join(b["text"] for b in system_blocks)
-        assert BRIEF_SYSTEM in system_text
+        assert "chief-of-staff" in system_text
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +87,7 @@ def test_cache_control_on_stable_block():
             mock_settings.brief_model = "claude-sonnet-4-6"
 
             from tbc_worker_brief.sender import _call_anthropic
-            _call_anthropic(cached_context, "fresh input")
+            _call_anthropic(cached_context, "fresh input", system_prompt=_TEST_BRIEF_SYSTEM)
 
         call_kwargs = mock_client.messages.create.call_args
         messages = call_kwargs.kwargs["messages"]
@@ -115,7 +117,7 @@ def test_fresh_block_has_no_cache_control():
             mock_settings.brief_model = "claude-sonnet-4-6"
 
             from tbc_worker_brief.sender import _call_anthropic
-            _call_anthropic(cached_context, "fresh data today")
+            _call_anthropic(cached_context, "fresh data today", system_prompt=_TEST_BRIEF_SYSTEM)
 
         call_kwargs = mock_client.messages.create.call_args
         messages = call_kwargs.kwargs["messages"]

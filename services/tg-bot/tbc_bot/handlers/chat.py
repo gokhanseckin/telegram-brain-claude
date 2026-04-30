@@ -13,6 +13,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
+from tbc_common.db.session import get_sessionmaker
+from tbc_common.db.tags import get_active_tags, get_valid_tag_names
+
 from tbc_bot.agent import ask
 from tbc_bot.guards import is_owner
 from tbc_bot.router import match_rule
@@ -109,16 +112,29 @@ async def handle_text(message: Message, state: FSMContext) -> None:
 
     history = _history[chat_id]
 
+    # ─── Load valid tags for this request ──────────────────────────────
+    sm = get_sessionmaker()
+    with sm() as session:
+        tags = get_active_tags(session)
+        valid_names = {t.name for t in tags}
+
     # ─── Router pre-pass ────────────────────────────────────────────────
     # 1) Rules first — strict-vocab regex catches obvious feedback DMs
     #    sub-second, no LLM, no Claude.
-    decision = match_rule(message.text)
+    decision = match_rule(message.text, valid_tags=valid_names)
 
     # 2) LLM classifier — Qwen 3B handles free-text reactions, commitments,
     #    Q&A discrimination. Returns ambiguous on any failure (parse,
     #    schema, low confidence) so we never silently escalate.
     if decision is None:
-        decision = await llm_classify(message.text)
+        from tbc_bot.router.prompt import build_router_prompt
+
+        router_prompt = build_router_prompt(tags)
+        decision = await llm_classify(
+            message.text,
+            system_prompt=router_prompt,
+            valid_tags=valid_names,
+        )
 
     # 3) Dispatch.
     if decision.intent == "feedback":

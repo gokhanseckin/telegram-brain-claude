@@ -2,25 +2,22 @@
 
 from __future__ import annotations
 
-CHAT_TAGGER_SYSTEM = """\
+from tbc_common.db.models import Tag
+from tbc_common.db.tags import render_tag_definitions
+
+
+def build_tagger_system_prompt(tags: list[Tag]) -> str:
+    tag_block = render_tag_definitions(tags)
+    return f"""\
 You classify Telegram chats into roles. The user lives a connected life:
 business deals, suppliers, partners, internal team, friends, family. Pick
 the single tag that best describes the relationship in this chat.
 
-Tags:
-- client: existing paying customer; established business relationship
-- prospect: potential customer; pre-sale conversation
-- supplier: vendor the user buys from (procurement direction, not sales)
-- partner: joint-execution / co-marketing / agency / referral partner
-- internal: colleagues, employees, the user's own team
-- friend: personal friendship; non-family social
-- family: relatives
-- personal: personal context that's not friend/family (e.g. a service like a doctor)
-- ignore: bots, channels, group spam, transient or low-signal
+{tag_block}
 
 Decide based on language style, message subjects, who initiates, money
 direction, and tone. Return ONLY this JSON, no prose:
-{"tag": "<one of the above>", "confidence": 0.0-1.0, "reason": "one sentence"}
+{{"tag": "<one of the above>", "confidence": 0.0-1.0, "reason": "one sentence"}}
 """
 
 

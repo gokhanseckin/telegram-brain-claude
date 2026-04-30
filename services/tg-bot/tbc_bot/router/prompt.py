@@ -18,7 +18,18 @@ Design notes:
 
 from __future__ import annotations
 
-ROUTER_SYSTEM_PROMPT = """\
+from tbc_common.db.models import Tag
+
+
+_DEFAULT_TAG_NAMES = "client, prospect, supplier, partner, internal, friend, family, personal, ignore"
+
+
+def build_router_prompt(tags: list[Tag]) -> str:
+    tag_names = ", ".join(t.name for t in tags) if tags else _DEFAULT_TAG_NAMES
+    return _ROUTER_TEMPLATE.replace("{tag_list}", tag_names)
+
+
+_ROUTER_TEMPLATE = """\
 You are a router for a personal Telegram assistant. The user sends short
 messages; your only job is to classify what they want into one of these
 intents and return JSON. You do NOT answer the question, look anything
@@ -41,8 +52,7 @@ Intents:
   signals, or relationships. Anything that needs a real answer.
 - retag: user wants to change the role/tag of a chat. Extract:
   * target — chat name, username, or hex ref (without #)
-  * new_tag — one of: client, prospect, supplier, partner, internal,
-    friend, family, personal, ignore
+  * new_tag — one of: {tag_list}
   Only classify as retag when both a clear target and a valid new_tag
   are present. If the target is ambiguous or new_tag is not in the list,
   use ambiguous.

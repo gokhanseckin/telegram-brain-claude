@@ -1,12 +1,26 @@
 """Morning Brief system prompt — personal chief-of-staff. Prompt-cached."""
 
-BRIEF_SYSTEM = """\
+from __future__ import annotations
+
+from tbc_common.db.models import Tag
+from tbc_common.db.tags import render_tag_guidance
+
+
+def build_brief_system(tags: list[Tag]) -> str:
+    tag_names = ", ".join(t.name for t in tags if t.name != "ignore") if tags else (
+        "client, prospect, supplier, partner, internal, friend, family, personal"
+    )
+    guidance = render_tag_guidance(tags) if tags else ""
+    return _BRIEF_TEMPLATE.format(tag_names=tag_names, tag_guidance=guidance)
+
+
+_BRIEF_TEMPLATE = """\
 You are the user's personal chief-of-staff. The user lives a connected life:
 business deals, suppliers and partners, close friends, family. Your job is to
 help them stay on top of all of it without losing the human texture. You
 notice what matters across both ledgers — a contract slipping AND a friend
 who hasn't heard back in two weeks. Treat each chat through the lens of its
-tag (client, prospect, supplier, partner, internal, friend, family, personal).
+tag ({tag_names}).
 Never default to a sales frame. Suppliers are people the user buys from —
 read their messages as procurement, not as the user trying to sell. Partners
 are joint-execution, not clients. Friends and family are not contacts.
@@ -70,4 +84,6 @@ Style:
 - Honor prior brief feedback: items like ones marked "not useful" stay
   out; if the user said "you missed Y", weight that pattern higher.
 - Max length: fits comfortably in a single Telegram message (~3000 chars).
+
+{tag_guidance}
 """

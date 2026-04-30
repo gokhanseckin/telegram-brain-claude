@@ -40,7 +40,7 @@ class Chat(Base):
     type: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text)
     username: Mapped[str | None] = mapped_column(Text)
-    tag: Mapped[str | None] = mapped_column(Text)  # client|prospect|supplier|partner|internal|friend|family|personal|ignore|NULL
+    tag: Mapped[str | None] = mapped_column(Text)  # see tags table
     tag_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tag_confidence: Mapped[float | None] = mapped_column(Float)
     tag_source: Mapped[str | None] = mapped_column(Text)  # 'manual'|'auto_embedding'|'auto_llm'
@@ -208,6 +208,23 @@ class ServiceState(Base):
     )
     initial_backfill_done_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
+    )
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+
+    name: Mapped[str] = mapped_column(Text, primary_key=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    analysis_guidance: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 

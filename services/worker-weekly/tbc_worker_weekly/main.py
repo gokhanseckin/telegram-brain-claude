@@ -12,6 +12,9 @@ from tbc_common.config import settings
 from tbc_common.db.session import get_sessionmaker
 from tbc_common.logging import configure_logging
 
+from tbc_common.db.tags import get_active_tags
+from tbc_common.prompts.weekly import build_weekly_system
+
 from tbc_worker_weekly.assembler import build_weekly_input, monday_of_week
 from tbc_worker_weekly.sender import call_llm, post_to_telegram, save_weekly
 
@@ -39,8 +42,10 @@ def run_weekly() -> None:
     monday = monday_of_week(today)
 
     with session_factory() as session:
+        tags = get_active_tags(session)
+        system_prompt = build_weekly_system(tags)
         weekly_input = build_weekly_input(session)
-        weekly_text = call_llm(weekly_input, today)
+        weekly_text = call_llm(weekly_input, today, system_prompt=system_prompt)
         log.info("weekly_generated", length=len(weekly_text))
 
         post_to_telegram(weekly_text)
