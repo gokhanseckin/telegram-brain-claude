@@ -91,3 +91,12 @@ class BriefText(BaseModel):
     date: date | None
     content: str
     generated_at: datetime | None
+
+
+class BriefFeedbackResult(BaseModel):
+    id: int
+    brief_date: date
+    item_ref: str | None
+    feedback: str
+    note: str | None
+    created_at: datetime

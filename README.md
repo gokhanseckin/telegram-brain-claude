@@ -63,7 +63,17 @@ The Telegram bot is the sole UI. DM the bot one of these commands (only the conf
 
 ## Brief feedback loop
 
-The brief is **calibrated by you** through `/feedback`. Each "Worth Noticing" item that comes from a radar alert ends with a `#xxxx` reference tag. Reply with one of:
+The brief is **calibrated by you**. Each "Worth Noticing" item that comes from a radar alert ends with a `#xxxx` reference tag. Two ways to react — both write the same `brief_feedback` row:
+
+**Plain DM** (Claude routes it via the `write_brief_feedback` MCP tool):
+
+```
+the #5096 was useful
+not useful, just smalltalk #5096
+you missed Yuri's exit, that deserved a callout
+```
+
+**Slash command** (precise bypass, no LLM):
 
 ```
 /feedback #5096 not_useful "I already know about this"
@@ -72,7 +82,7 @@ The brief is **calibrated by you** through `/feedback`. Each "Worth Noticing" it
 /feedback missed "Yuri's exit deserved a callout"
 ```
 
-Aliases the parser accepts:
+Aliases the slash parser accepts:
 
 | Type | Aliases |
 |---|---|

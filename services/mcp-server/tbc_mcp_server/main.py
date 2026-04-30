@@ -32,6 +32,7 @@ from .tools.commitments import (
     resolve_commitment,
     update_commitment,
 )
+from .tools.feedback import InvalidFeedbackType, write_brief_feedback
 from .tools.relationship import get_relationship_state
 from .tools.search import search_messages, semantic_search
 from .tools.signals import get_signals
@@ -282,6 +283,51 @@ async def handle_list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="write_brief_feedback",
+            description=(
+                "Record user feedback on a Morning Brief item. Use when the "
+                "user reacts to brief content in plain language ('the #ab12 "
+                "was useful', 'not useful, just smalltalk', 'you missed the "
+                "Acme thing'). Mirrors /feedback slash command — both paths "
+                "write the same brief_feedback row, which calibrates the next "
+                "brief. If the user references a `#xxxx` tag, pass it as "
+                "item_ref. If they're reporting something missing without a "
+                "tag, set feedback_type='missed_important' and put their "
+                "phrasing in note. Always confirm in your reply what was "
+                "written."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "feedback_type": {
+                        "type": "string",
+                        "enum": ["useful", "not_useful", "missed_important"],
+                        "description": (
+                            "useful = item was worth surfacing; "
+                            "not_useful = noise/already-known; "
+                            "missed_important = brief should have surfaced this."
+                        ),
+                    },
+                    "item_ref": {
+                        "type": "string",
+                        "description": (
+                            "The `#xxxx` tag from the brief (with or without "
+                            "the leading #). Required for useful/not_useful; "
+                            "optional for missed_important."
+                        ),
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": (
+                            "User's free-text reasoning, e.g. 'just smalltalk' "
+                            "or 'this should have been bigger'."
+                        ),
+                    },
+                },
+                "required": ["feedback_type"],
+            },
+        ),
+        Tool(
             name="get_signals",
             description="Query signals detected in messages — business and personal.",
             inputSchema={
@@ -450,6 +496,18 @@ async def _dispatch_tool(name: str, args: dict, db: Session) -> object:  # type:
         except (CommitmentNotFound, ValueError) as exc:
             return {"error": str(exc)}
         return result.model_dump()
+
+    elif name == "write_brief_feedback":
+        try:
+            fb_result = write_brief_feedback(
+                db,
+                feedback_type=args["feedback_type"],
+                item_ref=args.get("item_ref"),
+                note=args.get("note"),
+            )
+        except InvalidFeedbackType as exc:
+            return {"error": str(exc)}
+        return fb_result.model_dump()
 
     elif name == "get_signals":
         date_from = date.fromisoformat(args["date_from"]) if args.get("date_from") else None
