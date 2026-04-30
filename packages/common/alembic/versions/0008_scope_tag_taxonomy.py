@@ -16,7 +16,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0008_remove_client_friend_supplier_rename_internal"
+revision: str = "0008_scope_tag_taxonomy"
 down_revision: str | None = "0007_tags_table"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
