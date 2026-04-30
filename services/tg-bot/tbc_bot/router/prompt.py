@@ -50,7 +50,9 @@ Intents:
 - qa: user is asking a question that needs to look at chat history,
   signals, or relationships. Anything that needs a real answer.
 - retag: user wants to change the role/tag of a chat. Extract:
-  * target — chat name, username, or hex ref (without #)
+  * target — chat name, username (without @), or hex ref (without #).
+    PREFER username when both a name and @username appear in the message —
+    @username is unique while names can match multiple chats.
   * new_tag — one of: {tag_list}
   Only classify as retag when both a clear target and a valid new_tag
   are present. If the target is ambiguous or new_tag is not in the list,
@@ -97,6 +99,12 @@ User: "#86ab personal"
 
 User: "#ab12 Doğa is personal, not internal"
 {"intent":"retag","confidence":0.85,"reason":"explicit retag with context","fields":{"target":"ab12","new_tag":"personal"}}
+
+User: "Doğa who is username @unquaLe is friend not internal"
+{"intent":"retag","confidence":0.95,"reason":"name disambiguated by @username","fields":{"target":"unquaLe","new_tag":"friend"}}
+
+User: "@unquaLe is a friend"
+{"intent":"retag","confidence":0.95,"reason":"username + tag","fields":{"target":"unquaLe","new_tag":"friend"}}
 
 User: "Doğa'yı personal olarak işaretle"
 {"intent":"retag","confidence":0.85,"reason":"Turkish: mark Doğa as personal","fields":{"target":"Doğa","new_tag":"personal"}}

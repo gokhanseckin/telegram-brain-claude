@@ -11,6 +11,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import func, select
+from tbc_common.config import settings
 from tbc_common.db.models import Chat, MessageUnderstanding
 from tbc_common.db.models import Message as TgMessage
 from tbc_common.db.session import get_sessionmaker
@@ -151,6 +152,7 @@ async def cmd_status(message: Message) -> None:
 
     lines = [
         f"Status{pause_status}",
+        f"Brief LLM: {settings.llm_provider}",
         f"Total messages: {total_messages:,}",
         f"Understood: {total_understood:,}",
         f"Unprocessed: {unprocessed:,}",
@@ -165,19 +167,37 @@ async def cmd_help(message: Message) -> None:
     if not is_owner(message):
         return
     await message.answer(
-        "Available commands:\n"
+        "Slash commands\n"
         "/help — show this help\n"
         "/start — onboarding\n"
-        "/tag — re-run chat tagging\n"
-        "/ignore [ChatName] — ignore current chat or a chat by name\n"
+        "/status — ingestion health + active brief LLM\n"
         "/brief — generate today's brief now\n"
         "/weekly — generate weekly review now\n"
-        "/search <query> — keyword search over messages\n"
         "/pause — pause ingestion\n"
         "/resume — resume ingestion\n"
-        "/status — show ingestion health\n"
+        "/search <query> — keyword search over messages\n"
+        "/ignore [ChatName] — mark a chat ignored\n"
+        "/tag — re-run chat tagging\n"
+        "/listtags — list active tags with AI guidance\n"
+        "/newtag — create a new tag (FSM)\n"
+        "/edittag — edit an existing tag (FSM)\n"
         "/feedback — give feedback on a brief item\n"
+        "/done c<id> [note] — mark commitment done\n"
+        "/cancel c<id> [reason] — cancel a commitment "
+        "(or bare /cancel to abort an FSM flow)\n"
         "/reset — clear Claude conversation history\n"
-        "\nAny message without a leading / is sent to Claude.",
+        "\n"
+        "Natural-language shortcuts (handled directly, no Claude call)\n"
+        "Brief feedback:    \"#abcd useful\", \"#abcd not useful\", "
+        "\"#abcd missed\", \"useful #abcd\"\n"
+        "Commitment done:   \"done c42\", \"finished c42 sent today\", "
+        "\"completed c42\"\n"
+        "Commitment cancel: \"cancel c42\", \"drop c42\", \"forget c42\"\n"
+        "Commitment Q&A:    \"explain c42\", \"what is c42\", "
+        "\"tell me about c42 and c43\"\n"
+        "Retag a chat:      \"#abcd prospect\" or \"prospect #abcd\" "
+        "(any active /listtags tag)\n"
+        "\n"
+        "Anything else without a leading / goes to Claude.",
         parse_mode=None,
     )

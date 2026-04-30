@@ -183,14 +183,42 @@ class RetagSearchOutcome:
 
 
 def _search_chat_sync(target: str) -> tuple[int, list[tuple[int, str]]]:
+    """Search chats by title OR username. A leading '@' on target is stripped.
+
+    Username is the more specific identifier — when both match, exact-username
+    matches are preferred over title contains-matches to disambiguate cases
+    like "Doğa" matching 4 chats by title but only 1 by @unquaLe.
+    """
+    from sqlalchemy import or_
+
+    raw = target.strip()
+    bare = raw.lstrip("@")
     sm = get_sessionmaker()
     with sm() as session:
-        rows = list(
+        # Exact username match first (case-insensitive) — if a user typed
+        # @unquaLe we want that single chat, not all titles containing 'unquaLe'.
+        exact_username = list(
             session.scalars(
-                select(Chat).where(Chat.title.ilike(f"%{target}%"))
+                select(Chat).where(Chat.username.ilike(bare))
             ).all()
         )
-    return len(rows), [(r.chat_id, r.title or f"chat_{r.chat_id}") for r in rows]
+        if len(exact_username) == 1:
+            r = exact_username[0]
+            return 1, [(r.chat_id, r.title or r.username or f"chat_{r.chat_id}")]
+
+        rows = list(
+            session.scalars(
+                select(Chat).where(
+                    or_(
+                        Chat.title.ilike(f"%{bare}%"),
+                        Chat.username.ilike(f"%{bare}%"),
+                    )
+                )
+            ).all()
+        )
+    return len(rows), [
+        (r.chat_id, r.title or r.username or f"chat_{r.chat_id}") for r in rows
+    ]
 
 
 def _apply_retag_sync(chat_id: int, new_tag: str) -> str:
