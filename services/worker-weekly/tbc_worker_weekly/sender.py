@@ -22,8 +22,18 @@ BATCH_POLL_INTERVAL = 60  # seconds
 BATCH_TIMEOUT = 600  # seconds (10 minutes)
 
 
-def call_batch_api(weekly_input: str, today: date) -> str:
-    """Submit weekly review via Anthropic Batch API. Returns the generated text."""
+def call_llm(weekly_input: str, today: date) -> str:
+    """Call the configured LLM provider. Returns the weekly review text."""
+    provider = settings.llm_provider
+    if provider == "deepseek":
+        return _call_deepseek(weekly_input)
+    if provider == "anthropic":
+        return _call_anthropic_batch(weekly_input, today)
+    raise ValueError(f"Unknown LLM provider: {provider!r}")
+
+
+def _call_anthropic_batch(weekly_input: str, today: date) -> str:
+    """Anthropic Batch API path with polling."""
     api_key = settings.anthropic_api_key
     if api_key is None:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
@@ -67,6 +77,29 @@ def call_batch_api(weekly_input: str, today: date) -> str:
         raise RuntimeError(f"Batch request failed: {result.result}")
 
     return cast(BetaTextBlock, result.result.message.content[0]).text
+
+
+def _call_deepseek(weekly_input: str) -> str:
+    """DeepSeek path via OpenAI-compatible API."""
+    from openai import OpenAI
+
+    api_key = settings.deepseek_api_key
+    if api_key is None:
+        raise RuntimeError("DEEPSEEK_API_KEY is not set")
+
+    client = OpenAI(
+        api_key=api_key.get_secret_value(),
+        base_url="https://api.deepseek.com",
+    )
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        max_tokens=4000,
+        messages=[
+            {"role": "system", "content": WEEKLY_SYSTEM},
+            {"role": "user", "content": weekly_input},
+        ],
+    )
+    return response.choices[0].message.content or ""
 
 
 def post_to_telegram(text: str) -> None:

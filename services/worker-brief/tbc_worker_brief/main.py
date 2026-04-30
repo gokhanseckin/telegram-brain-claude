@@ -13,7 +13,7 @@ from tbc_common.db.session import get_sessionmaker
 from tbc_common.logging import configure_logging
 
 from tbc_worker_brief.assembler import build_cached_context, build_fresh_input
-from tbc_worker_brief.sender import call_anthropic, post_to_telegram, save_brief, stamp_radar_alerts
+from tbc_worker_brief.sender import call_llm, post_to_telegram, save_brief, stamp_radar_alerts
 
 log = structlog.get_logger(__name__)
 
@@ -30,7 +30,7 @@ def run_brief() -> None:
         cached_context = build_cached_context(session)
         fresh_input, alert_ids = build_fresh_input(session)
 
-        brief_text = call_anthropic(cached_context, fresh_input)
+        brief_text = call_llm(cached_context, fresh_input)
         log.info("brief_generated", length=len(brief_text))
 
         post_to_telegram(brief_text)
@@ -59,8 +59,10 @@ def main() -> None:
     configure_logging("worker-brief")
     log.info("worker_brief_starting")
 
-    if settings.anthropic_api_key is None:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    if settings.llm_provider == "anthropic" and settings.anthropic_api_key is None:
+        raise RuntimeError("ANTHROPIC_API_KEY is required when TBC_LLM_PROVIDER=anthropic")
+    if settings.llm_provider == "deepseek" and settings.deepseek_api_key is None:
+        raise RuntimeError("DEEPSEEK_API_KEY is required when TBC_LLM_PROVIDER=deepseek")
 
     parts = settings.brief_time.split(":")
     if len(parts) != 2 or not all(p.isdigit() for p in parts):
