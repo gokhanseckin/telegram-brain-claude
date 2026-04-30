@@ -121,8 +121,8 @@ def _classify_sentiment(raw: str) -> str | None:
 
 
 _DEFAULT_VALID_TAGS = {
-    "client", "prospect", "supplier", "partner", "internal",
-    "friend", "family", "personal", "ignore",
+    "prospect", "partner", "colleague",
+    "family", "personal", "ignore",
 }
 
 

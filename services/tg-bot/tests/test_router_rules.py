@@ -131,13 +131,13 @@ def test_commitment_shortcut_requires_explicit_c_prefix(text):
     "text,expected_target,expected_tag",
     [
         ("#86ab personal", "86ab", "personal"),
-        ("#ABCD client", "abcd", "client"),
+        ("#ABCD prospect", "abcd", "prospect"),
         ("prospect #1234abcd", "1234abcd", "prospect"),
-        ("#86ab internal", "86ab", "internal"),
+        ("#86ab colleague", "86ab", "colleague"),
         ("ignore #abcd", "abcd", "ignore"),
-        ("#abcd friend", "abcd", "friend"),
+        ("#abcd colleague", "abcd", "colleague"),
         ("family #abcd", "abcd", "family"),
-        ("supplier #abcd", "abcd", "supplier"),
+        ("personal #abcd", "abcd", "personal"),
         ("partner #abcd", "abcd", "partner"),
     ],
 )

@@ -95,8 +95,8 @@ def _parse_llm_json(raw: str) -> dict[str, Any] | None:
 
 
 _DEFAULT_VALID_TAGS = {
-    "client", "prospect", "supplier", "partner", "internal",
-    "friend", "family", "personal", "ignore",
+    "prospect", "partner", "colleague",
+    "family", "personal", "ignore",
 }
 
 

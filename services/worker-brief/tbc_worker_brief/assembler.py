@@ -23,15 +23,14 @@ from tbc_common.db.models import (
 log = structlog.get_logger(__name__)
 
 SIGNAL_TAXONOMY = """\
-Signal taxonomy reference (interpret per chat tag — supplier_issue applies
-to chats tagged 'supplier', personal_event applies to friend/family/personal):
+Signal taxonomy reference (interpret per chat tag — personal_event applies
+to chats tagged family/personal, partnership applies to partner, etc.):
 
 Business signals:
-- buying: counterparty showing purchase intent (use for prospect/client tags)
-- expansion: existing client showing upsell opportunity
+- buying: counterparty showing purchase intent (use for prospect tags)
+- expansion: existing customer showing upsell opportunity
 - referral: counterparty likely to refer others
 - partnership: joint-venture or co-execution opening (partner tag)
-- supplier_issue: quality/timing/price problem from a supplier
 - procurement: user needs to buy something
 - competitor: competitor mentioned or active
 - objection: concern or blocker raised
@@ -44,10 +43,10 @@ Business signals:
 
 Personal signals:
 - personal_event: birthday, illness, big life change
-- emotional_support: friend/family expressing distress or needing presence
+- emotional_support: family/personal contact expressing distress or needing presence
 - celebration: good news worth acknowledging
 - favor_request: someone asked the user for help (non-business)
-- relationship_drift: friend/family contact has gone quiet
+- relationship_drift: family/personal contact has gone quiet
 
 Cross-cutting:
 - commitment_made: explicit promise the user made
