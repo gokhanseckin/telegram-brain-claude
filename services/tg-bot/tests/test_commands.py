@@ -20,10 +20,12 @@ def _make_message(
     text: str,
     user_id: int = 42,
     is_owner: bool = True,
+    message_id: int = 1,
 ) -> AsyncMock:
     """Build a minimal mock Message with an async answer() method."""
     msg = AsyncMock()
     msg.text = text
+    msg.message_id = message_id
     msg.from_user = SimpleNamespace(id=user_id)
     msg.answer = AsyncMock()
     return msg
@@ -235,6 +237,117 @@ async def test_feedback_canonical_types_all_valid():
 
         assert len(captured) == 1, f"{ft} should have inserted a row"
         assert captured[0].feedback == ft
+
+
+# ---------------------------------------------------------------------------
+# /done c<id> — mark commitment resolved
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_done_resolves_commitment_by_id():
+    from tbc_bot.handlers.commitments import cmd_done
+
+    msg = _make_message("/done c42 sent today", message_id=999)
+    fake_row = MagicMock()
+    fake_row.id = 42
+    fake_row.description = "send the report\n[resolved 2026-04-30: sent today]"
+
+    with (
+        patch("tbc_bot.handlers.commitments.is_owner", return_value=True),
+        patch(
+            "tbc_bot.handlers.commitments.resolve_commitment", return_value=fake_row
+        ) as mock_resolve,
+    ):
+        await cmd_done(msg)
+
+    mock_resolve.assert_called_once()
+    assert mock_resolve.call_args.kwargs["commitment_id"] == 42
+    assert mock_resolve.call_args.kwargs["note"] == "sent today"
+    assert mock_resolve.call_args.kwargs["resolved_by_message_id"] == 999
+    msg.answer.assert_called_once()
+    reply = msg.answer.call_args[0][0]
+    assert "Marked done: c42" in reply
+
+
+@pytest.mark.asyncio
+async def test_done_accepts_bare_digit_form():
+    """/done 42 (no `c`) also works — the prefix is optional in the slash form."""
+    from tbc_bot.handlers.commitments import cmd_done
+
+    msg = _make_message("/done 42")
+    fake_row = MagicMock()
+    fake_row.id = 42
+    fake_row.description = "send the report"
+
+    with (
+        patch("tbc_bot.handlers.commitments.is_owner", return_value=True),
+        patch(
+            "tbc_bot.handlers.commitments.resolve_commitment", return_value=fake_row
+        ) as mock_resolve,
+    ):
+        await cmd_done(msg)
+
+    assert mock_resolve.call_args.kwargs["commitment_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_done_unknown_id_replies_no_commitment_no_call():
+    from tbc_bot.handlers.commitments import cmd_done
+    from tbc_common.db.commitments import CommitmentNotFound
+
+    msg = _make_message("/done c99999")
+
+    with (
+        patch("tbc_bot.handlers.commitments.is_owner", return_value=True),
+        patch(
+            "tbc_bot.handlers.commitments.resolve_commitment",
+            side_effect=CommitmentNotFound("commitment 99999 not found"),
+        ),
+    ):
+        await cmd_done(msg)
+
+    msg.answer.assert_called_once()
+    reply = msg.answer.call_args[0][0]
+    assert "c99999" in reply
+    assert "No commitment" in reply or "not found" in reply.lower()
+
+
+@pytest.mark.asyncio
+async def test_done_no_args_shows_usage():
+    from tbc_bot.handlers.commitments import cmd_done
+
+    msg = _make_message("/done")
+
+    with patch("tbc_bot.handlers.commitments.is_owner", return_value=True):
+        await cmd_done(msg)
+
+    msg.answer.assert_called_once()
+    assert "Usage" in msg.answer.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_cancel_marks_commitment_cancelled():
+    from tbc_bot.handlers.commitments import cmd_cancel
+
+    msg = _make_message("/cancel c7 no longer needed")
+    fake_row = MagicMock()
+    fake_row.id = 7
+    fake_row.description = "follow up with vendor"
+
+    with (
+        patch("tbc_bot.handlers.commitments.is_owner", return_value=True),
+        patch(
+            "tbc_bot.handlers.commitments.cancel_commitment", return_value=fake_row
+        ) as mock_cancel,
+    ):
+        await cmd_cancel(msg)
+
+    mock_cancel.assert_called_once()
+    assert mock_cancel.call_args.kwargs["commitment_id"] == 7
+    assert mock_cancel.call_args.kwargs["reason"] == "no longer needed"
+    msg.answer.assert_called_once()
+    assert "Cancelled: c7" in msg.answer.call_args[0][0]
 
 
 # ---------------------------------------------------------------------------

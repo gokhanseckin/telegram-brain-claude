@@ -77,6 +77,56 @@ def test_no_match(text):
     assert match_rule(text) is None
 
 
+@pytest.mark.parametrize(
+    "text,expected_intent,expected_id,expected_note_or_reason",
+    [
+        ("done c42", "commitment_resolve", 42, None),
+        ("done c42 sent today", "commitment_resolve", 42, "sent today"),
+        ("DONE C42", "commitment_resolve", 42, None),
+        ("finished c1", "commitment_resolve", 1, None),
+        ("completed c9999 with extra context", "commitment_resolve", 9999, "with extra context"),
+        ("resolved c7", "commitment_resolve", 7, None),
+        ("cancel c42", "commitment_cancel", 42, None),
+        ("cancel c42 no longer needed", "commitment_cancel", 42, "no longer needed"),
+        ("cancelled c5", "commitment_cancel", 5, None),
+        ("drop c12 overcome by events", "commitment_cancel", 12, "overcome by events"),
+        ("forget c8", "commitment_cancel", 8, None),
+    ],
+)
+def test_commitment_shortcut_rule(text, expected_intent, expected_id, expected_note_or_reason):
+    decision = match_rule(text)
+    assert decision is not None, f"expected match for {text!r}"
+    assert decision.intent == expected_intent
+    assert decision.confidence == 1.0
+    assert decision.source == "rule"
+    assert decision.fields["commitment_id"] == expected_id
+    field = "note" if expected_intent == "commitment_resolve" else "reason"
+    assert decision.fields.get(field) == expected_note_or_reason
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # No `c` prefix → leave to Claude (could be free-text "done with...")
+        "done 42",
+        # Free-text without explicit id — must NOT match the shortcut path
+        "done with the report",
+        "I sent the report",
+        "cancel the contract thing",
+        "forget about it",
+        # Hex tag accidentally typed without #: don't conflate
+        "done abcd",
+    ],
+)
+def test_commitment_shortcut_requires_explicit_c_prefix(text):
+    """Free-text commitment phrasing without `c<id>` falls through to Qwen/Claude.
+    The point of the rule path is determinism — only act when the id is explicit."""
+    decision = match_rule(text)
+    if decision is not None:
+        # If something matched, it must NOT be a commitment intent
+        assert decision.intent not in ("commitment_resolve", "commitment_cancel")
+
+
 def test_note_quotes_stripped():
     decision = match_rule('#abcd not_useful "duplicate of yesterday"')
     assert decision is not None
