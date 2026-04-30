@@ -30,14 +30,28 @@ EVAL: list[tuple[str, dict, str, dict | None]] = [
         "feedback",
         {"feedback_type": "useful", "item_ref": "ab12"},
     ),
-    # --- Feedback: free-text reaction with tag (the Doğa case) ---
+    # --- Feedback: explicit not_useful with note (the kind of free-text
+    # reaction the Doğa example USED to claim — but actual chat-tag
+    # corrections like "Doğa is personal" are now classified as
+    # ambiguous; see the ambiguous section below).
     (
-        "#a8ce Doğa is not a prospect, he is a friend",
+        "#a8ce not useful, just smalltalk",
         {"intent": "feedback", "confidence": 0.9,
          "fields": {"feedback_type": "not_useful", "item_ref": "a8ce",
-                    "note": "Doğa is not a prospect, he is a friend"}},
+                    "note": "just smalltalk"}},
         "feedback",
         {"feedback_type": "not_useful", "item_ref": "a8ce"},
+    ),
+    # --- Ambiguous: chat-tag correction (NOT brief feedback). brief_feedback
+    # table doesn't model retagging; PR3 will add a retag intent. Until
+    # then these must classify as ambiguous so the user gets asked to
+    # rephrase rather than polluting brief calibration.
+    (
+        "#a8ce Doğa is personal, not internal",
+        {"intent": "ambiguous", "confidence": 0.4,
+         "reason": "chat-tag correction"},
+        "ambiguous",
+        None,
     ),
     # --- Feedback: missed without tag ---
     (

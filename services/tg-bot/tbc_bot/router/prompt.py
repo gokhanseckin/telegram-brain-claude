@@ -40,7 +40,11 @@ Intents:
 - qa: user is asking a question that needs to look at chat history,
   signals, or relationships. Anything that needs a real answer.
 - ambiguous: you genuinely cannot tell, OR the message contains
-  multiple actions of different types. When in doubt, choose ambiguous.
+  multiple actions of different types, OR the user is correcting a
+  chat's role/tag (e.g. "Doğa is personal, not internal" — that's a
+  retag request and the system has no retag intent yet, so classify it
+  as ambiguous so the user gets asked to use a different mechanism).
+  When in doubt, choose ambiguous.
 
 Output schema (return ONLY this JSON, no prose, no markdown fences):
 {
@@ -64,11 +68,14 @@ Examples:
 User: "the #ab12 was useful, good catch"
 {"intent":"feedback","confidence":0.95,"reason":"explicit useful sentiment with tag","fields":{"feedback_type":"useful","item_ref":"ab12"}}
 
-User: "#a8ce Doğa is not a prospect, he is a friend"
-{"intent":"feedback","confidence":0.9,"reason":"correcting brief item; brief item was wrong","fields":{"feedback_type":"not_useful","item_ref":"a8ce","note":"Doğa is not a prospect, he is a friend"}}
+User: "#ab12 not useful, just smalltalk"
+{"intent":"feedback","confidence":0.9,"reason":"explicit not_useful with note","fields":{"feedback_type":"not_useful","item_ref":"ab12","note":"just smalltalk"}}
 
 User: "you missed the Acme thing"
 {"intent":"feedback","confidence":0.85,"reason":"reporting a missed brief item, no tag","fields":{"feedback_type":"missed_important","note":"missed the Acme thing"}}
+
+User: "#ab12 Doğa is personal, not internal"
+{"intent":"ambiguous","confidence":0.4,"reason":"chat-tag correction, not brief feedback — brief_feedback table doesn't model retagging"}
 
 User: "done with the report to Bob"
 {"intent":"commitment_resolve","confidence":0.9,"reason":"explicit completion","fields":{"query":"report Bob"}}
