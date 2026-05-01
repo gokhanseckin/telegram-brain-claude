@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-from tbc_common.db.models import Message, MessageUnderstanding
+from tbc_common.db.models import Message, MessageUnderstanding, User
 from tbc_common.prompts import MODEL_VERSION
 
 from .ollama_client import OllamaClient
@@ -52,16 +52,22 @@ def _extract_json_object(raw: str) -> str | None:
     return None
 
 
-def _build_user_message(message: Message, context_messages: list[Message]) -> str:
+def _build_user_message(
+    message: Message,
+    context_messages: list[Message],
+    sender_labels: dict[int | None, str],
+) -> str:
     """Build the user-facing input string for the understanding prompt."""
     lines: list[str] = []
     if context_messages:
         lines.append("=== Prior context (oldest first) ===")
         for m in context_messages:
-            lines.append(f"[{m.sent_at.isoformat()}] {m.text}")
+            label = sender_labels.get(m.sender_id, "unknown")
+            lines.append(f"[{m.sent_at.isoformat()}] [{label}] {m.text}")
         lines.append("")
     lines.append("=== Message to analyse ===")
-    lines.append(message.text or "")
+    label = sender_labels.get(message.sender_id, "unknown")
+    lines.append(f"[{label}] {message.text or ''}")
     return "\n".join(lines)
 
 
@@ -133,7 +139,20 @@ async def process_message(
     )
     context_messages = list(reversed(prior))  # oldest first
 
-    user_input = _build_user_message(message, context_messages)
+    all_sender_ids = {m.sender_id for m in context_messages} | {message.sender_id}
+    all_sender_ids.discard(None)
+    sender_labels: dict[int | None, str] = {}
+    for sid in all_sender_ids:
+        user = session.get(User, sid)
+        if user is None:
+            sender_labels[sid] = "unknown"
+        elif user.is_self:
+            sender_labels[sid] = "YOU"
+        else:
+            name = " ".join(filter(None, [user.first_name, user.last_name])) or user.username or str(sid)
+            sender_labels[sid] = name
+
+    user_input = _build_user_message(message, context_messages, sender_labels)
 
     # --- 2. Call understanding model ---
     raw_content = await ollama.chat(

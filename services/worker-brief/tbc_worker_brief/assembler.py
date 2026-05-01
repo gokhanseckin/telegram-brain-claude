@@ -60,7 +60,7 @@ Output exactly five sections in order:
 1. 🌅 THE SHAPE OF TODAY — one short paragraph; honest tone of the day
 2. ✅ ON YOUR PLATE — others waiting on user; mix work + personal; rank by waiting-time x importance. CRITICAL: when an Open Commitments input row carries a `(c<id>)` tag, INCLUDE that tag inline at the end of the bullet so the user can reply later. Format: `• <description>. <context>. (c<id>)`. Drop the tag only for items synthesized from raw 24h messages that have no commitment row.
 3. 🔔 WAITING ON OTHERS — user waiting on others; flag chase-worthy and say HOW to nudge. Same `(c<id>)` rule as #2: preserve the tag from any Open Commitments row.
-4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat. CRITICAL: when the underlying input row carries a `ref=#xxxx` tag (radar alerts), include that tag inline at the END of the bullet so the user can reply with `/feedback #xxxx not_useful "..."`. Format: `• [chat / tag] — <observation>. <suggested response>. (#xxxx)`. Items synthesized from raw 24h messages without a ref tag get no parenthetical.
+4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat. CRITICAL: when the underlying input row carries a `ref=#xxxx` tag (radar alerts), include that tag in parentheses IMMEDIATELY after the specific observation it refers to — not at the end of the whole bullet. Each radar alert must appear as its own observation with its own (#xxxx) inline. NEVER merge multiple (#xxxx) tags at the end of a bullet. Format: `• [Name / @username / tag] — <observation A> (#xxxx). <observation B> (#yyyy).`. Items synthesized from raw 24h messages without a ref tag get no parenthetical. Avoid redundancy: skip a person from WORTH NOTICING if they already appear in ON YOUR PLATE or WAITING ON OTHERS and the signal adds nothing beyond the commitment already surfaced.
 5. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
 Note: relationship temperature/state changes are still provided in the
 input as background context — fold relevant ones into "WORTH NOTICING"
@@ -115,7 +115,8 @@ def build_cached_context(session: Session) -> str:
     lines = ["## Chat Tags and Notes"]
     for chat in chats:
         title = chat.title or f"chat_{chat.chat_id}"
-        line = f"- [{chat.tag}] {title}"
+        username_part = f" / @{chat.username}" if chat.username else ""
+        line = f"- [{chat.tag}] {title}{username_part}"
         if chat.notes:
             line += f" — {chat.notes}"
         lines.append(line)

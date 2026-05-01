@@ -57,6 +57,17 @@ def extract_commitments(session: Session) -> int:
             continue
 
         commitment_data: dict[str, Any] = mu.commitment or {}
+
+        confidence = commitment_data.get("confidence")
+        if isinstance(confidence, (int, float)) and confidence < 3:
+            logger.debug(
+                "commitment_skipped_low_confidence",
+                chat_id=mu.chat_id,
+                message_id=mu.message_id,
+                confidence=confidence,
+            )
+            continue
+
         owner = _normalize_owner(commitment_data.get("who"))
         description = commitment_data.get("what") or mu.summary_en or "(no description)"
 

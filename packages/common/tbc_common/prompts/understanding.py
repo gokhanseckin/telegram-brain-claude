@@ -40,8 +40,18 @@ Output schema (return ONLY this JSON, no prose):
 }}
 
 Rules:
-- is_directed_at_user: true if message asks the user something or clearly addresses them.
-- Commitments are explicit ("I will send X by Friday"). Vague intentions are not commitments.
+- Messages prefixed [YOU] are from the user themselves. A [YOU] message
+  saying "I will send X" means commitment.who="user". A [YOU] message is
+  never directed_at_user.
+- is_directed_at_user: true if the message (from a counterparty, not [YOU])
+  asks the user something or clearly addresses them.
+- Commitments are explicit, first-person pledges with a clear deliverable:
+  "I will send X by Friday", "I'll call you tomorrow", "I'll make the intro
+  by EOW". Set is_commitment=true ONLY when you can answer: who promised
+  what to whom, with a concrete deliverable. NOT commitments: casual "I'll
+  try", "maybe later", "sounds good", "let me think about it", "we should
+  catch up", "I'll check" (without a specific follow-through). When in
+  doubt, set is_commitment=false and confidence=1.
 - Signals require evidence in the message; do not speculate. Low confidence → signal_strength 1-2.
 - Treat channel announcements and group spam as is_signal=false, intent="announcement".
 - Personal signals (personal_event, emotional_support, celebration, favor_request, relationship_drift)
