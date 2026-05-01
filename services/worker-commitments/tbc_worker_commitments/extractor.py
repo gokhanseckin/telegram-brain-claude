@@ -25,15 +25,16 @@ _ALLOWED_OWNERS = {"user", "counterparty", "user_counterparty"}
 # is worse than nothing — the user chases ghosts. Catch them post-LLM and
 # rewrite to a deterministic review marker.
 _BANNED_RECIPIENT_PHRASES = (
+    # Noun-phrase placeholders only — these are unambiguously generic.
+    # Pronouns ("him"/"her"/"them") are valid when they have a local antecedent
+    # in the same sentence (e.g. "pick up Sergei and bring him") so we let
+    # them through — false-positive risk outweighs the leak rate.
     "the intended recipient",
     "the relevant person",
     "the recipient",
     "the person",
     "the user",
     "someone",
-    " him ",
-    " her ",
-    " them ",
 )
 _REVIEW_MARKER = "(recipient unclear from context)"
 
