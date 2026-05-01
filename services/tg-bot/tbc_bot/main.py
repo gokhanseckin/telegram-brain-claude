@@ -38,6 +38,9 @@ async def main() -> None:
     elif provider == "deepseek":
         if settings.deepseek_api_key is None:
             raise RuntimeError("DEEPSEEK_API_KEY required when TBC_LLM_PROVIDER=deepseek")
+    elif provider == "novita":
+        if settings.novita_api_key is None:
+            raise RuntimeError("NOVITA_API_KEY required when TBC_LLM_PROVIDER=novita")
     else:
         raise RuntimeError(f"Unknown TBC_LLM_PROVIDER: {provider!r}")
 
