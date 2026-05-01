@@ -42,7 +42,12 @@ class Settings(BaseSettings):
     # DeepSeek (brief/weekly when TBC_LLM_PROVIDER=deepseek)
     deepseek_api_key: SecretStr | None = Field(default=None, validation_alias="DEEPSEEK_API_KEY")
 
+    # novita.ai (brief/weekly/agent when TBC_LLM_PROVIDER=novita)
+    novita_api_key: SecretStr | None = Field(default=None, validation_alias="NOVITA_API_KEY")
+    novita_model: str = Field(default="google/gemma-3-27b-it", validation_alias="TBC_NOVITA_MODEL")
+
     # Provider selection for brief + weekly workers and the tg-bot agent.
+    # Valid values: "anthropic", "deepseek", "novita"
     llm_provider: str = Field(default="deepseek", validation_alias="TBC_LLM_PROVIDER")
 
     # Telegram userbot
