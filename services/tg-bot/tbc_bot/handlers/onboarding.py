@@ -7,7 +7,7 @@ chat before moving to the next.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -57,15 +57,23 @@ def _load_tag_names() -> list[str]:
     return [t.name for t in tags] + ["skip"]
 
 
+_RECENCY_DAYS = 90
+
+
 def _load_chats(session: Session, skip_tagged: bool = False) -> list[Chat]:
     """Top 40 chats ordered by message count descending.
 
-    If skip_tagged is True, exclude chats that already have a tag.
+    Excludes chats whose most recent message is older than 90 days —
+    stale chats are not worth onboarding effort.
+
+    If skip_tagged is True, also exclude chats that already have a tag.
     """
+    cutoff = datetime.now(UTC) - timedelta(days=_RECENCY_DAYS)
     subq = (
         select(
             TgMessage.chat_id,
             func.count(TgMessage.message_id).label("msg_count"),
+            func.max(TgMessage.sent_at).label("last_sent"),
         )
         .group_by(TgMessage.chat_id)
         .subquery()
@@ -73,6 +81,7 @@ def _load_chats(session: Session, skip_tagged: bool = False) -> list[Chat]:
     stmt = (
         select(Chat)
         .join(subq, Chat.chat_id == subq.c.chat_id)
+        .where(subq.c.last_sent >= cutoff)
         .order_by(subq.c.msg_count.desc())
         .limit(40)
     )
