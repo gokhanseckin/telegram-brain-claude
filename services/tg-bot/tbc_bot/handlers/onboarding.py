@@ -57,8 +57,11 @@ def _load_tag_names() -> list[str]:
     return [t.name for t in tags] + ["skip"]
 
 
-def _load_chats(session: Session) -> list[Chat]:
-    """Top 40 chats ordered by message count descending."""
+def _load_chats(session: Session, skip_tagged: bool = False) -> list[Chat]:
+    """Top 40 chats ordered by message count descending.
+
+    If skip_tagged is True, exclude chats that already have a tag.
+    """
     subq = (
         select(
             TgMessage.chat_id,
@@ -73,6 +76,8 @@ def _load_chats(session: Session) -> list[Chat]:
         .order_by(subq.c.msg_count.desc())
         .limit(40)
     )
+    if skip_tagged:
+        stmt = stmt.where(Chat.tag.is_(None))
     return list(session.scalars(stmt).all())
 
 
@@ -126,16 +131,21 @@ async def _send_next_chat(trigger: Message | CallbackQuery, state: FSMContext) -
         await target_msg.answer(text, reply_markup=_tag_keyboard(tag_names), parse_mode=None)
 
 
-async def _start_onboarding(message: Message, state: FSMContext) -> None:
+async def _start_onboarding(
+    message: Message, state: FSMContext, skip_tagged: bool = False
+) -> None:
     if not is_owner(message):
         return
 
     sm = get_sessionmaker()
     with sm() as session:
-        chats = _load_chats(session)
+        chats = _load_chats(session, skip_tagged=skip_tagged)
 
     if not chats:
-        await message.answer("No chats found yet. Make sure ingestion has run first.")
+        if skip_tagged:
+            await message.answer("No untagged chats left. All your top chats are tagged.")
+        else:
+            await message.answer("No chats found yet. Make sure ingestion has run first.")
         return
 
     chats_data = [{"chat_id": c.chat_id, "title": c.title} for c in chats]
@@ -155,7 +165,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("tag"))
 async def cmd_tag(message: Message, state: FSMContext) -> None:
-    await _start_onboarding(message, state)
+    await _start_onboarding(message, state, skip_tagged=True)
 
 
 @router.callback_query(OnboardingState.tagging, F.data.startswith("tag:"))
