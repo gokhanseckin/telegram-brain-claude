@@ -18,6 +18,7 @@ from tbc_common.db.models import (
     MessageUnderstanding,
     RadarAlert,
     RelationshipState,
+    User,
 )
 
 log = structlog.get_logger(__name__)
@@ -90,14 +91,14 @@ def render_commitment(
     chat_label: str = "",
     source_text: str = "",
     summary: str = "",
+    prior_thread: list[tuple[str, str]] | None = None,
 ) -> str:
     """Render an Open Commitments line for the brief input.
 
-    Includes the source message text (truncated) and the per-message
-    `summary_en` so the brief LLM has enough context to write a
-    meaningful sentence rather than echoing a thin description like
-    "tell the person". Without this, Gemma's terse `commitment.what`
-    bubbled up verbatim into the user-facing brief.
+    `prior_thread` is a list of (sender_label, text) for ~3 messages
+    immediately preceding the commitment in the same chat — this is
+    what lets Claude resolve antecedents like "tell someone" → "tell
+    Salih about the cleaning arrangement".
 
     The trailing `(c<id>)` short-id is the load-bearing UX hook.
     """
@@ -113,11 +114,18 @@ def render_commitment(
     ]
     if summary:
         parts.append(f"    summary: {summary}")
+    if prior_thread:
+        parts.append("    prior thread (oldest first):")
+        for label, ptext in prior_thread:
+            snippet = (ptext or "").replace("\n", " ").strip()
+            if len(snippet) > 160:
+                snippet = snippet[:157] + "..."
+            parts.append(f"      [{label}] {snippet}")
     if source_text:
         snippet = source_text.replace("\n", " ").strip()
         if len(snippet) > 200:
             snippet = snippet[:197] + "..."
-        parts.append(f"    source: {snippet}")
+        parts.append(f"    source ({c.owner}): {snippet}")
     return "\n".join(parts)
 
 
@@ -249,6 +257,32 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         text_val, summary_val = row
         return text_val or "", summary_val or ""
 
+    def _prior_thread(c: Commitment) -> list[tuple[str, str]]:
+        if c.source_message_id is None or c.chat_id is None:
+            return []
+        rows = session.execute(
+            select(Message.sender_id, Message.text)
+            .where(Message.chat_id == c.chat_id)
+            .where(Message.message_id < c.source_message_id)
+            .where(Message.deleted_at.is_(None))
+            .where(Message.text.isnot(None))
+            .where(Message.text != "")
+            .order_by(Message.sent_at.desc())
+            .limit(3)
+        ).all()
+        result: list[tuple[str, str]] = []
+        for sender_id, text_val in reversed(rows):  # oldest first
+            label = "?"
+            if sender_id is not None:
+                u = session.get(User, sender_id)
+                if u is not None:
+                    if u.is_self:
+                        label = "YOU"
+                    else:
+                        label = " ".join(filter(None, [u.first_name, u.last_name])) or u.username or str(sender_id)
+            result.append((label, text_val or ""))
+        return result
+
     def _render_commit(c: Commitment) -> str:
         text_val, summary_val = _source_text_and_summary(c)
         return render_commitment(
@@ -257,6 +291,7 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
             chat_label=_label_for(c.chat_id),
             source_text=text_val,
             summary=summary_val,
+            prior_thread=_prior_thread(c),
         )
 
     # Recency filter on the true conversation date when available, falling back
