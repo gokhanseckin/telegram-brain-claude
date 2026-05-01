@@ -241,9 +241,14 @@ Rules:
 - NOT commitments: casual "I'll try", "maybe later", "sounds good", "let me
   think about it", "we should catch up", "I'll check" (without a specific
   follow-through). When in doubt, set is_commitment=false and confidence=1.
-- Your description must be supported by the TARGET message's literal text.
-  Prior context is for disambiguating references only — do not import
-  content, intent, or actions from prior messages into the description.
+- Your description must be supported by the target message's literal text —
+  do NOT invent actions, deliverables, or topics that are not mentioned in
+  the target. BUT you MUST resolve names, pronouns, and ambiguous references
+  that the target message points to using prior context (e.g. target says
+  "tell him about it" + prior context names "Adnan" and discusses an
+  envelope address → resolve to "tell Adnan about the envelope address").
+  Anti-fabrication and antecedent-resolution are not in conflict: the action
+  must come from the target, the names must come from context.
 - Signals require evidence in the message; do not speculate. Low confidence -> signal_strength 1-2.
 - Treat channel announcements and group spam as is_signal=false, intent="announcement".
 - Personal signals (personal_event, emotional_support, celebration, favor_request, relationship_drift)
