@@ -362,11 +362,20 @@ async def process_message_batch(
             block_lines.append(f"  [{lab}] {message.text or ''}")
             block_lines.append("")
             block_lines.append(
-                "REMINDER: Only set is_commitment=true if THIS message contains a "
-                "first-person pledge with a concrete deliverable. If yes, the \"what\" "
-                "field must name the speaker, the action, the topic, AND the recipient "
-                "or audience using proper names from the speaker registry above — never "
-                "\"him\"/\"her\"/\"the person\"/\"the user\"."
+                "REMINDER (apply only if this message is a real first-person pledge):\n"
+                "  1. The \"what\" field must read as a complete sentence: "
+                "<SpeakerName> will <verb> <topic> to <named recipient or audience>.\n"
+                "  2. Use proper names from the Speaker registry above — never the "
+                "BANNED words: \"him\", \"her\", \"the person\", \"the relevant person\", "
+                "\"the recipient\", \"the intended recipient\", \"someone\", \"the user\".\n"
+                "  3. If the recipient is genuinely NOT in the registry or prior "
+                "context above, write the literal string \"(recipient unclear from "
+                "context)\" — that exact phrase, NOT a generic placeholder. The "
+                "downstream brief uses this phrase as a review signal.\n"
+                "  4. If THIS message is just an acknowledgement/status (\"OK\", "
+                "\"Tamamdır\", \"I'm forwarding\"), it is a commitment ONLY if the "
+                "deliverable is named in the same line. If you have to infer the "
+                "deliverable from prior context, set is_commitment=false."
             )
             msg_blocks.append("\n".join(block_lines))
 
