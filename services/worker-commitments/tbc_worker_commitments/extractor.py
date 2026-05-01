@@ -59,7 +59,7 @@ def extract_commitments(session: Session) -> int:
         commitment_data: dict[str, Any] = mu.commitment or {}
 
         confidence = commitment_data.get("confidence")
-        if isinstance(confidence, (int, float)) and confidence < 3:
+        if not isinstance(confidence, (int, float)) or confidence < 4:
             logger.debug(
                 "commitment_skipped_low_confidence",
                 chat_id=mu.chat_id,

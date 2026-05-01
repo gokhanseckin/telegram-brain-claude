@@ -8,14 +8,14 @@ from pydantic import BaseModel
 
 
 class UnderstandingOutput(BaseModel):
-    language: str
+    language: str = "other"
     entities: list[dict[str, str]] = []
-    intent: str
-    is_directed_at_user: bool
-    is_commitment: bool
+    intent: str = "other"
+    is_directed_at_user: bool = False
+    is_commitment: bool = False
     commitment: dict[str, Any] | None = None
-    is_signal: bool
+    is_signal: bool = False
     signal_type: str | None = None
     signal_strength: int | None = None
-    sentiment_delta: int
-    summary_en: str
+    sentiment_delta: int = 0
+    summary_en: str = ""
