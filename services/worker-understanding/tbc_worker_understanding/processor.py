@@ -482,7 +482,7 @@ async def process_message_batch(
         "batch_processed",
         n=len(messages),
         success=success,
-        commitments=sum(1 for r in results if isinstance(r, dict) and r.get("is_commitment")),
+        commitments=sum(1 for r in results_raw if isinstance(r, dict) and r.get("is_commitment")),
     )
     return success
 
