@@ -28,6 +28,8 @@ def call_llm(weekly_input: str, today: date, *, system_prompt: str) -> str:
         return _call_deepseek(weekly_input, system_prompt=system_prompt)
     if provider == "anthropic":
         return _call_anthropic_batch(weekly_input, today, system_prompt=system_prompt)
+    if provider == "novita":
+        return _call_novita(weekly_input, system_prompt=system_prompt)
     raise ValueError(f"Unknown LLM provider: {provider!r}")
 
 
@@ -92,6 +94,29 @@ def _call_deepseek(weekly_input: str, *, system_prompt: str) -> str:
     )
     response = client.chat.completions.create(
         model="deepseek-chat",
+        max_tokens=4000,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": weekly_input},
+        ],
+    )
+    return response.choices[0].message.content or ""
+
+
+def _call_novita(weekly_input: str, *, system_prompt: str) -> str:
+    """novita.ai path via OpenAI-compatible API."""
+    from openai import OpenAI
+
+    api_key = settings.novita_api_key
+    if api_key is None:
+        raise RuntimeError("NOVITA_API_KEY is not set")
+
+    client = OpenAI(
+        api_key=api_key.get_secret_value(),
+        base_url="https://api.novita.ai/v3/openai",
+    )
+    response = client.chat.completions.create(
+        model=settings.novita_model,
         max_tokens=4000,
         messages=[
             {"role": "system", "content": system_prompt},

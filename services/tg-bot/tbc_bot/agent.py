@@ -1,4 +1,4 @@
-"""Claude / DeepSeek agent with MCP tool access for answering questions about Telegram data."""
+"""Claude / DeepSeek / novita.ai agent with MCP tool access for answering questions about Telegram data."""
 
 from __future__ import annotations
 
@@ -202,6 +202,81 @@ async def _ask_deepseek(history: list[dict[str, Any]], user_text: str) -> str:
     return content.strip() or "(no response)"
 
 
+# ── novita.ai client (lazy singleton) ──
+
+_novita_client: Any = None
+
+
+def _get_novita_client() -> Any:
+    global _novita_client
+    if _novita_client is None:
+        from openai import AsyncOpenAI
+
+        api_key = settings.novita_api_key
+        if api_key is None:
+            raise RuntimeError("NOVITA_API_KEY is not set")
+        _novita_client = AsyncOpenAI(
+            api_key=api_key.get_secret_value(),
+            base_url="https://api.novita.ai/v3/openai",
+        )
+    return _novita_client
+
+
+async def _ask_novita(history: list[dict[str, Any]], user_text: str) -> str:
+    """novita.ai path — own MCP client + OpenAI-compatible function calling."""
+    client = _get_novita_client()
+    tools = await mcp_client.get_tools()
+
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *history,
+        {"role": "user", "content": user_text},
+    ]
+
+    for iteration in range(_MAX_TOOL_ITERATIONS):
+        response = await client.chat.completions.create(
+            model=settings.novita_model,
+            max_tokens=4096,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+        )
+        choice = response.choices[0]
+
+        if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+            break
+
+        messages.append(choice.message.model_dump(exclude_unset=True))
+
+        for tc in choice.message.tool_calls:
+            t0 = time.monotonic()
+            result_text = await mcp_client.call_tool(
+                tc.function.name,
+                json.loads(tc.function.arguments),
+            )
+            log.info(
+                "agent_tool_call",
+                tool=tc.function.name,
+                duration_ms=int((time.monotonic() - t0) * 1000),
+                iteration=iteration,
+            )
+            messages.append(
+                {"role": "tool", "tool_call_id": tc.id, "content": result_text}
+            )
+    else:
+        log.warning("agent_max_iterations", max=_MAX_TOOL_ITERATIONS)
+
+    content = choice.message.content or ""
+    log.info(
+        "agent_response",
+        provider="novita",
+        prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+        completion_tokens=response.usage.completion_tokens if response.usage else 0,
+        stop_reason=choice.finish_reason,
+    )
+    return content.strip() or "(no response)"
+
+
 # ── Public dispatcher ──
 
 
@@ -212,4 +287,6 @@ async def ask(history: list[dict[str, Any]], user_text: str) -> str:
         return await _ask_anthropic(history, user_text)
     if provider == "deepseek":
         return await _ask_deepseek(history, user_text)
+    if provider == "novita":
+        return await _ask_novita(history, user_text)
     raise ValueError(f"Unknown LLM provider: {provider!r}")
