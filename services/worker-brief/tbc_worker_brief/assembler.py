@@ -83,25 +83,24 @@ Keep total length under 3000 characters to fit a single Telegram message.
 """
 
 
-def render_commitment(c: Commitment, *, now: datetime, chat_label: str = "") -> str:
+def render_commitment(
+    c: Commitment,
+    *,
+    now: datetime,
+    chat_label: str = "",
+    source_text: str = "",
+    summary: str = "",
+) -> str:
     """Render an Open Commitments line for the brief input.
 
-    `chat_label` is the human-readable counterparty identifier
-    (e.g., "Barış / @baris / personal") so the brief LLM can name the
-    person who owes / is owed. Without it the model just sees the
-    description and surfaces "Someone".
+    Includes the source message text (truncated) and the per-message
+    `summary_en` so the brief LLM has enough context to write a
+    meaningful sentence rather than echoing a thin description like
+    "tell the person". Without this, Gemma's terse `commitment.what`
+    bubbled up verbatim into the user-facing brief.
 
-    The trailing `(c<id>)` short-id is the load-bearing UX hook: the
-    LLM is instructed to preserve it inline in ON YOUR PLATE / WAITING
-    ON OTHERS, and the user can later mark a commitment with that
-    handle (today: by talking to Claude / agent; future: a `/done c42`
-    rules-path slash, see queued PR3 work).
-
-    `c` prefix disambiguates from radar's hex `#xxxx` tags.
+    The trailing `(c<id>)` short-id is the load-bearing UX hook.
     """
-    # Prefer source_sent_at (when the conversation actually happened)
-    # over created_at (when the extractor wrote the row). Fall back to
-    # created_at only if the column hasn't been backfilled yet.
     anchor = c.source_sent_at or c.created_at
     anchor = anchor if anchor.tzinfo else anchor.replace(tzinfo=UTC)
     age_days = (now - anchor).days
@@ -109,7 +108,17 @@ def render_commitment(c: Commitment, *, now: datetime, chat_label: str = "") -> 
     date_kind = "from" if c.source_sent_at else "extracted"
     due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else " (no due date)"
     chat_part = f" [with {chat_label}]" if chat_label else ""
-    return f"- [{date_kind} {date_label}, age={age_days}d]{due}{chat_part} (c{c.id}) {c.description}"
+    parts = [
+        f"- [{date_kind} {date_label}, age={age_days}d]{due}{chat_part} (c{c.id}) {c.description}"
+    ]
+    if summary:
+        parts.append(f"    summary: {summary}")
+    if source_text:
+        snippet = source_text.replace("\n", " ").strip()
+        if len(snippet) > 200:
+            snippet = snippet[:197] + "..."
+        parts.append(f"    source: {snippet}")
+    return "\n".join(parts)
 
 
 def build_cached_context(session: Session) -> str:
@@ -221,8 +230,34 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         chat_label_cache[chat_id] = label
         return label
 
+    def _source_text_and_summary(c: Commitment) -> tuple[str, str]:
+        if c.source_message_id is None or c.chat_id is None:
+            return "", ""
+        row = session.execute(
+            select(Message.text, MessageUnderstanding.summary_en)
+            .join(
+                MessageUnderstanding,
+                (MessageUnderstanding.chat_id == Message.chat_id)
+                & (MessageUnderstanding.message_id == Message.message_id),
+                isouter=True,
+            )
+            .where(Message.chat_id == c.chat_id)
+            .where(Message.message_id == c.source_message_id)
+        ).first()
+        if row is None:
+            return "", ""
+        text_val, summary_val = row
+        return text_val or "", summary_val or ""
+
     def _render_commit(c: Commitment) -> str:
-        return render_commitment(c, now=now, chat_label=_label_for(c.chat_id))
+        text_val, summary_val = _source_text_and_summary(c)
+        return render_commitment(
+            c,
+            now=now,
+            chat_label=_label_for(c.chat_id),
+            source_text=text_val,
+            summary=summary_val,
+        )
 
     # Recency filter on the true conversation date when available, falling back
     # to created_at when source_sent_at is unset (e.g. row predates backfill).
