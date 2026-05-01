@@ -49,6 +49,23 @@ Rules:
   "I will send X by Friday", "I'll call you tomorrow", "I'll make the intro
   by EOW". Set is_commitment=true ONLY when you can answer: who promised
   what to whom, with a concrete deliverable.
+- COMMITMENT.WHAT MUST BE SELF-CONTAINED. The "what" field is read by a
+  downstream brief writer that does NOT see the prior thread. Always
+  resolve pronouns and antecedents from prior context BEFORE writing the
+  description. Name the specific person, object, deadline, or topic.
+  BAD examples (DO NOT WRITE LIKE THIS):
+    - "tell the person"               → who is "the person"?
+    - "forward the information"       → what information? to whom?
+    - "call him"                      → call whom about what?
+    - "warn him again"                → about what?
+  GOOD examples:
+    - "tell Salih about the cleaning arrangement at end of month"
+    - "forward the envelope details (10000 yen + katakana name) to Adnan"
+    - "call the school principal about the vacuum cleaner purchase"
+    - "warn the keiko host before next session about the late-arrival issue"
+  If the prior context lacks the antecedent, write what IS knowable
+  (e.g. "forward the most recent message to the recipient discussed
+  earlier in the thread") rather than just "forward it".
 - THIRD-PARTY RULE: only first-person pledges count. "He'll call", "They'll
   deliver", "She will arrive" are NOT commitments by the speaker — they are
   reports about a third party. Set is_commitment=false in these cases.
@@ -137,6 +154,23 @@ Rules:
   "I will send X by Friday", "I'll call you tomorrow", "I'll make the intro
   by EOW". Set is_commitment=true ONLY when you can answer: who promised
   what to whom, with a concrete deliverable.
+- COMMITMENT.WHAT MUST BE SELF-CONTAINED. The "what" field is read by a
+  downstream brief writer that does NOT see the prior thread. Always
+  resolve pronouns and antecedents from prior context BEFORE writing the
+  description. Name the specific person, object, deadline, or topic.
+  BAD examples (DO NOT WRITE LIKE THIS):
+    - "tell the person"               → who is "the person"?
+    - "forward the information"       → what information? to whom?
+    - "call him"                      → call whom about what?
+    - "warn him again"                → about what?
+  GOOD examples:
+    - "tell Salih about the cleaning arrangement at end of month"
+    - "forward the envelope details (10000 yen + katakana name) to Adnan"
+    - "call the school principal about the vacuum cleaner purchase"
+    - "warn the keiko host before next session about the late-arrival issue"
+  If the prior context lacks the antecedent, write what IS knowable
+  (e.g. "forward the most recent message to the recipient discussed
+  earlier in the thread") rather than just "forward it".
 - THIRD-PARTY RULE: only first-person pledges count. "He'll call", "They'll
   deliver", "She will arrive" are NOT commitments by the speaker — they are
   reports about a third party. Set is_commitment=false in these cases.

@@ -9,7 +9,7 @@ from tbc_common.prompts.brief import build_brief_system
 from tbc_common.prompts.understanding import build_understanding_system
 from tbc_common.prompts.weekly import build_weekly_system
 
-MODEL_VERSION = "understanding-2026-05-01-v7-tokenbudget-resolves"
+MODEL_VERSION = "understanding-2026-05-01-v8-explicit-what"
 
 __all__ = [
     "MODEL_VERSION",
