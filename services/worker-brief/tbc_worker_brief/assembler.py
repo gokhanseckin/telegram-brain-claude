@@ -83,8 +83,13 @@ Keep total length under 3000 characters to fit a single Telegram message.
 """
 
 
-def render_commitment(c: Commitment, *, now: datetime) -> str:
+def render_commitment(c: Commitment, *, now: datetime, chat_label: str = "") -> str:
     """Render an Open Commitments line for the brief input.
+
+    `chat_label` is the human-readable counterparty identifier
+    (e.g., "Barış / @baris / personal") so the brief LLM can name the
+    person who owes / is owed. Without it the model just sees the
+    description and surfaces "Someone".
 
     The trailing `(c<id>)` short-id is the load-bearing UX hook: the
     LLM is instructed to preserve it inline in ON YOUR PLATE / WAITING
@@ -103,7 +108,8 @@ def render_commitment(c: Commitment, *, now: datetime) -> str:
     date_label = anchor.strftime("%Y-%m-%d")
     date_kind = "from" if c.source_sent_at else "extracted"
     due = f" (due: {c.due_at.strftime('%Y-%m-%d')})" if c.due_at else " (no due date)"
-    return f"- [{date_kind} {date_label}, age={age_days}d]{due} (c{c.id}) {c.description}"
+    chat_part = f" [with {chat_label}]" if chat_label else ""
+    return f"- [{date_kind} {date_label}, age={age_days}d]{due}{chat_part} (c{c.id}) {c.description}"
 
 
 def build_cached_context(session: Session) -> str:
@@ -195,8 +201,28 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
 
     ninety_days_ago = now - timedelta(days=90)
 
+    # Pre-fetch chat labels so render_commitment can include the counterparty
+    # name (otherwise the brief LLM can only say "Someone").
+    chat_label_cache: dict[int, str] = {}
+
+    def _label_for(chat_id: int | None) -> str:
+        if chat_id is None:
+            return ""
+        if chat_id in chat_label_cache:
+            return chat_label_cache[chat_id]
+        ch = session.get(Chat, chat_id)
+        if ch is None:
+            label = f"chat_{chat_id}"
+        else:
+            title = ch.title or f"chat_{chat_id}"
+            uname = f" / @{ch.username}" if ch.username else ""
+            tag = f" / {ch.tag}" if ch.tag else ""
+            label = f"{title}{uname}{tag}"
+        chat_label_cache[chat_id] = label
+        return label
+
     def _render_commit(c: Commitment) -> str:
-        return render_commitment(c, now=now)
+        return render_commitment(c, now=now, chat_label=_label_for(c.chat_id))
 
     # Recency filter on the true conversation date when available, falling back
     # to created_at when source_sent_at is unset (e.g. row predates backfill).
