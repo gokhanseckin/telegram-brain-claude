@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import defaultdict
 
 import structlog
 from sqlalchemy import text
@@ -37,13 +38,75 @@ _POLL_SQL = text("""
           WHERE tag IS NOT NULL AND tag != 'ignore'
       )
     ORDER BY m.sent_at DESC
-    LIMIT 100
+    LIMIT 200
 """)
 
 
 def _poll(session: Session) -> list[tuple[int, int]]:
     rows = session.execute(_POLL_SQL, {"model_version": MODEL_VERSION}).fetchall()
     return [(r.chat_id, r.message_id) for r in rows]
+
+
+def _assemble_chat_aware_batch(
+    msgs_all: list[Message],
+    *,
+    max_n: int,
+    max_chats_per_batch: int,
+    budget_chars: int,
+) -> list[Message]:
+    """Group candidates by chat, then either fill from one chat (if it has
+    enough on its own) or round-robin from the top N chats. Each block of
+    messages from one chat stays contiguous (oldest-first within chat) so
+    Gemma sees coherent threads instead of an interleaved jumble.
+
+    Returns the selected batch in chat-grouped, oldest-first order.
+    """
+    if not msgs_all:
+        return []
+
+    by_chat: dict[int, list[Message]] = defaultdict(list)
+    for m in msgs_all:
+        by_chat[m.chat_id].append(m)
+    for cid in by_chat:
+        by_chat[cid].sort(key=lambda m: m.sent_at)  # oldest-first per chat
+
+    chats_sorted = sorted(by_chat.items(), key=lambda kv: len(kv[1]), reverse=True)
+
+    # Case 1: top chat alone has >= max_n messages → fill batch from just that chat.
+    if chats_sorted and len(chats_sorted[0][1]) >= max_n:
+        return chats_sorted[0][1][:max_n]
+
+    # Case 2: round-robin across the top max_chats_per_batch chats until max_n
+    # reached or token budget exhausted.
+    selected = chats_sorted[:max_chats_per_batch]
+    iters = [iter(msgs) for _, msgs in selected]
+    grouped: dict[int, list[Message]] = defaultdict(list)
+    cum_chars = 0
+    while iters and sum(len(g) for g in grouped.values()) < max_n:
+        progress = False
+        for it in iters[:]:
+            try:
+                m = next(it)
+            except StopIteration:
+                iters.remove(it)
+                continue
+            text_size = len(m.text or "") * 4
+            if cum_chars + text_size > budget_chars:
+                iters.remove(it)
+                continue
+            grouped[m.chat_id].append(m)
+            cum_chars += text_size
+            progress = True
+            if sum(len(g) for g in grouped.values()) >= max_n:
+                break
+        if not progress:
+            break
+
+    # Emit chat-by-chat (preserves coherent thread blocks in the prompt).
+    batch: list[Message] = []
+    for cid, _ in selected:
+        batch.extend(grouped.get(cid, []))
+    return batch
 
 
 async def run_loop() -> None:
@@ -78,24 +141,37 @@ async def run_loop() -> None:
                     if m is not None:
                         msgs_all.append(m)
 
-                # Token-aware batching: heuristic 3 chars/token (mixed Turkish/English).
-                # Each target message gets ~3x its size in prior context, so multiplier 4.
-                # Budget headroom: model 128K context - 12K output - 3K system prompt = ~110K input.
-                # Use 30K conservative budget per batch.
-                budget_chars = int(_os.environ.get("TBC_UNDERSTANDING_BATCH_CHAR_BUDGET", "90000"))
-                max_n = int(_os.environ.get("TBC_UNDERSTANDING_BATCH_MAX_N", "50"))
-                msgs = []
-                cum = 0
-                for m in msgs_all:
-                    text_size = len(m.text or "") * 4  # approx with prior context
-                    if msgs and (cum + text_size > budget_chars or len(msgs) >= max_n):
-                        break
-                    msgs.append(m)
-                    cum += text_size
+                # Chat-aware batching:
+                #   - if a chat has >= max_n pending, fill the batch from JUST that chat
+                #     (one coherent thread, ideal for Gemma + auto-resolve detection)
+                #   - otherwise, round-robin across the top `max_chats_per_batch` chats,
+                #     with each chat's messages emitted as a contiguous block (still
+                #     keeps each thread coherent inside the prompt)
+                #   - token budget = char heuristic (~3 chars/token mixed TR/EN, 4x for
+                #     prior-context overhead). Default 60K chars ≈ 20K tokens, well below
+                #     Gemma 4's 256K context.
+                budget_chars = int(_os.environ.get("TBC_UNDERSTANDING_BATCH_CHAR_BUDGET", "60000"))
+                max_n = int(_os.environ.get("TBC_UNDERSTANDING_BATCH_MAX_N", "20"))
+                max_chats_per_batch = int(_os.environ.get("TBC_UNDERSTANDING_MAX_CHATS_PER_BATCH", "3"))
 
-                msgs.reverse()  # oldest-first inside batch for natural flow + in-batch auto-resolve
+                msgs = _assemble_chat_aware_batch(
+                    msgs_all,
+                    max_n=max_n,
+                    max_chats_per_batch=max_chats_per_batch,
+                    budget_chars=budget_chars,
+                )
+                cum = sum(len(m.text or "") * 4 for m in msgs)
                 if msgs:
-                    log.info("batch_assembled", n=len(msgs), approx_input_chars=cum, candidates=len(msgs_all))
+                    chat_breakdown = {}
+                    for m in msgs:
+                        chat_breakdown[m.chat_id] = chat_breakdown.get(m.chat_id, 0) + 1
+                    log.info(
+                        "batch_assembled",
+                        n=len(msgs),
+                        approx_input_chars=cum,
+                        candidates=len(msgs_all),
+                        chats=chat_breakdown,
+                    )
                     try:
                         await process_message_batch(
                             messages=msgs,

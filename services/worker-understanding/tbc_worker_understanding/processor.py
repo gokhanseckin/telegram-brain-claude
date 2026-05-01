@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -133,7 +134,7 @@ async def process_message(
                 Message.text != "",
             )
             .order_by(Message.sent_at.desc())
-            .limit(3)
+            .limit(int(os.environ.get("TBC_UNDERSTANDING_PRIOR_CONTEXT_N", "7")))
         )
         .scalars()
         .all()
@@ -277,7 +278,7 @@ async def process_message_batch(
                     Message.text != "",
                 )
                 .order_by(Message.sent_at.desc())
-                .limit(3)
+                .limit(int(os.environ.get("TBC_UNDERSTANDING_PRIOR_CONTEXT_N", "7")))
             )
             .scalars()
             .all()
