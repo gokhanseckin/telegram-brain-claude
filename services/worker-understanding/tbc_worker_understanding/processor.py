@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-from tbc_common.db.models import Commitment, Message, MessageUnderstanding, User
+from tbc_common.db.models import Chat, Commitment, Message, MessageUnderstanding, User
 from tbc_common.prompts import MODEL_VERSION
 
 from .ollama_client import OllamaClient
@@ -265,52 +265,127 @@ async def process_message_batch(
     if not messages:
         return 0
 
-    blocks: list[str] = []
+    prior_n = int(os.environ.get("TBC_UNDERSTANDING_PRIOR_CONTEXT_N", "7"))
+
+    # Resolve chat metadata + a per-chat "speakers seen" registry.
+    chat_ids = list({m.chat_id for m in messages})
+    chats_by_id: dict[int, Chat | None] = {cid: session.get(Chat, cid) for cid in chat_ids}
+
+    # Group target messages by chat (preserve original idx — result ids depend on it).
+    by_chat: dict[int, list[tuple[int, Message]]] = {}
     for idx, message in enumerate(messages, start=1):
-        prior = (
-            session.execute(
-                select(Message)
-                .where(
-                    Message.chat_id == message.chat_id,
-                    Message.message_id < message.message_id,
-                    Message.deleted_at.is_(None),
-                    Message.text.isnot(None),
-                    Message.text != "",
+        by_chat.setdefault(message.chat_id, []).append((idx, message))
+
+    def _label_for(user: User | None, sid: int | None) -> str:
+        if user is None:
+            return "unknown"
+        if user.is_self:
+            return "YOU"
+        return " ".join(filter(None, [user.first_name, user.last_name])) or user.username or str(sid)
+
+    chat_blocks: list[str] = []
+    for chat_idx, (cid, items) in enumerate(by_chat.items(), start=1):
+        chat = chats_by_id.get(cid)
+        title = (chat.title if chat else None) or "(untitled)"
+        ctype = (chat.type if chat else None) or "unknown"
+        tag = (chat.tag if chat else None) or "untagged"
+
+        # Collect ALL sender ids appearing in this chat's targets + their prior contexts.
+        chat_speaker_ids: set[int] = set()
+        prior_per_msg: dict[int, list[Message]] = {}
+        for idx, message in items:
+            prior = (
+                session.execute(
+                    select(Message)
+                    .where(
+                        Message.chat_id == message.chat_id,
+                        Message.message_id < message.message_id,
+                        Message.deleted_at.is_(None),
+                        Message.text.isnot(None),
+                        Message.text != "",
+                    )
+                    .order_by(Message.sent_at.desc())
+                    .limit(prior_n)
                 )
-                .order_by(Message.sent_at.desc())
-                .limit(int(os.environ.get("TBC_UNDERSTANDING_PRIOR_CONTEXT_N", "7")))
+                .scalars()
+                .all()
             )
-            .scalars()
-            .all()
-        )
-        context_messages = list(reversed(prior))
+            ctx = list(reversed(prior))
+            prior_per_msg[idx] = ctx
+            if message.sender_id is not None:
+                chat_speaker_ids.add(message.sender_id)
+            for m in ctx:
+                if m.sender_id is not None:
+                    chat_speaker_ids.add(m.sender_id)
 
-        all_sender_ids = {m.sender_id for m in context_messages} | {message.sender_id}
-        all_sender_ids.discard(None)
         sender_labels: dict[int | None, str] = {}
-        for sid in all_sender_ids:
-            user = session.get(User, sid)
-            if user is None:
-                sender_labels[sid] = "unknown"
-            elif user.is_self:
-                sender_labels[sid] = "YOU"
+        for sid in chat_speaker_ids:
+            sender_labels[sid] = _label_for(session.get(User, sid), sid)
+
+        # Build a clean speaker registry — "YOU = Gokhan", others by name.
+        you_real_name = None
+        others: list[str] = []
+        for sid, label in sender_labels.items():
+            if label == "YOU":
+                u = session.get(User, sid)
+                you_real_name = " ".join(filter(None, [u.first_name, u.last_name])) if u else None
             else:
-                name = " ".join(filter(None, [user.first_name, user.last_name])) or user.username or str(sid)
-                sender_labels[sid] = name
+                others.append(label)
+        registry_lines = []
+        if you_real_name:
+            registry_lines.append(f"- YOU = {you_real_name} (the user this analysis serves)")
+        else:
+            registry_lines.append("- YOU = Gokhan (the user this analysis serves)")
+        for name in sorted(set(others)):
+            registry_lines.append(f"- {name}")
 
-        block_lines = [f"=== Message #{idx} ==="]
-        if context_messages:
-            block_lines.append("=== Prior context (oldest first) ===")
-            for m in context_messages:
-                lab = sender_labels.get(m.sender_id, "unknown")
-                block_lines.append(f"[{m.sent_at.isoformat()}] [{lab}] {m.text}")
+        chat_header = [
+            f"=== CHAT {chat_idx}: \"{title}\" ===",
+            f"Type: {ctype} | Tag: {tag}",
+            "Speakers in this chat:",
+            *registry_lines,
+            "",
+        ]
+
+        msg_blocks: list[str] = []
+        for idx, message in items:
+            ctx = prior_per_msg[idx]
+            block_lines = [f"--- Message #{idx} (chat {chat_idx}) ---"]
+            if ctx:
+                block_lines.append("Prior context (oldest first):")
+                for m in ctx:
+                    lab = sender_labels.get(m.sender_id, "unknown")
+                    block_lines.append(f"  [{m.sent_at.isoformat()}] [{lab}] {m.text}")
+                block_lines.append("")
+            block_lines.append("Message to analyse:")
+            lab = sender_labels.get(message.sender_id, "unknown")
+            block_lines.append(f"  [{lab}] {message.text or ''}")
             block_lines.append("")
-        block_lines.append("=== Message to analyse ===")
-        lab = sender_labels.get(message.sender_id, "unknown")
-        block_lines.append(f"[{lab}] {message.text or ''}")
-        blocks.append("\n".join(block_lines))
+            block_lines.append(
+                "REMINDER: Only set is_commitment=true if THIS message contains a "
+                "first-person pledge with a concrete deliverable. If yes, the \"what\" "
+                "field must name the speaker, the action, the topic, AND the recipient "
+                "or audience using proper names from the speaker registry above — never "
+                "\"him\"/\"her\"/\"the person\"/\"the user\"."
+            )
+            msg_blocks.append("\n".join(block_lines))
 
-    user_input = "\n\n".join(blocks)
+        chat_blocks.append("\n".join(chat_header) + "\n\n".join(msg_blocks))
+
+    overview_lines = [
+        f"=== BATCH OVERVIEW ===",
+        f"This batch contains {len(messages)} messages from {len(by_chat)} "
+        f"{'chat' if len(by_chat) == 1 else 'DIFFERENT chats'}.",
+    ]
+    if len(by_chat) > 1:
+        overview_lines.append(
+            "Each chat is a separate conversation with its own speakers. Do NOT "
+            "carry names, topics, or context across chat boundaries — a 'Barış' "
+            "in Chat 1 is not the same person as a 'Barış' in Chat 2 unless "
+            "explicitly the same chat."
+        )
+    overview_lines.append("")
+    user_input = "\n".join(overview_lines) + "\n" + "\n\n".join(chat_blocks)
 
     raw_content = await ollama.chat_batch(system=system_prompt_batched, user=user_input)
 
