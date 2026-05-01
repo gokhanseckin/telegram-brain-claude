@@ -49,23 +49,45 @@ Rules:
   "I will send X by Friday", "I'll call you tomorrow", "I'll make the intro
   by EOW". Set is_commitment=true ONLY when you can answer: who promised
   what to whom, with a concrete deliverable.
-- COMMITMENT.WHAT MUST BE SELF-CONTAINED. The "what" field is read by a
-  downstream brief writer that does NOT see the prior thread. Always
-  resolve pronouns and antecedents from prior context BEFORE writing the
-  description. Name the specific person, object, deadline, or topic.
+- COMMITMENT.WHAT MUST BE A FULL CLAUSE WITH SUBJECT + VERB + OBJECT/RECIPIENT + TOPIC.
+  The "what" field is read by a downstream brief writer that does NOT see
+  the prior thread. It must stand on its own as a complete sentence.
+  REQUIRED components (when present in source or prior context):
+    1. SUBJECT — the speaker's first name (or "Gokhan" for [YOU]). Even
+       though commitment.who already says "user" or "counterparty", the
+       what field must spell out the name so it reads as a sentence.
+    2. ACTION VERB — what they will do (call, send, forward, write, meet, ...)
+    3. RECIPIENT or OBJECT — who is on the receiving end OR what is acted on.
+       NEVER write "the person", "the user", "him", "her", "them", "the
+       relevant person", "the recipient", "someone" — these words are BANNED
+       in the what field. Look in prior context and use the proper name.
+    4. TOPIC — what the action is about (specific subject matter).
+    5. TIMING / CONDITION — if mentioned in source.
+  BANNED phrases (NEVER use these — find the proper noun):
+    - "the person" / "the relevant person" / "the recipient"
+    - "the user" (use "Gokhan" instead)
+    - "him" / "her" / "them" / "someone"
+    - "the information" alone (specify what information)
+    - "the message" alone (specify which message / its content)
   BAD examples (DO NOT WRITE LIKE THIS):
-    - "tell the person"               → who is "the person"?
-    - "forward the information"       → what information? to whom?
-    - "call him"                      → call whom about what?
-    - "warn him again"                → about what?
+    - "tell the person"
+    - "forward the information"
+    - "call him"
+    - "make an announcement regarding May 1"        ← missing audience
+    - "report observations to the user"             ← "the user" → "Gokhan"
+    - "Baris will forward the information to the relevant person"
+                                                    ← BOTH "info" + "person" generic
   GOOD examples:
-    - "tell Salih about the cleaning arrangement at end of month"
-    - "forward the envelope details (10000 yen + katakana name) to Adnan"
-    - "call the school principal about the vacuum cleaner purchase"
-    - "warn the keiko host before next session about the late-arrival issue"
-  If the prior context lacks the antecedent, write what IS knowable
-  (e.g. "forward the most recent message to the recipient discussed
-  earlier in the thread") rather than just "forward it".
+    - "Baris will tell Salih about the cleaning arrangement at end of month"
+    - "Baris will forward the envelope details (10000 yen + katakana name 'Baranjemu Dyukeru') to Adnan"
+    - "Gokhan will call the school principal about the vacuum cleaner purchase"
+    - "Baris will warn Baran before next keiko session about the late-arrival issue"
+    - "Baris will announce the May 1 holiday schedule to the keiko group chat"
+    - "Baris will report yesterday's keiko observations to Gokhan tomorrow morning"
+  If after scanning prior context the recipient is genuinely unknowable,
+  write "(recipient unclear from context)" explicitly rather than using a
+  generic placeholder — that's a signal for downstream review, not a
+  filler word the brief should propagate.
 - THIRD-PARTY RULE: only first-person pledges count. "He'll call", "They'll
   deliver", "She will arrive" are NOT commitments by the speaker — they are
   reports about a third party. Set is_commitment=false in these cases.
@@ -154,23 +176,45 @@ Rules:
   "I will send X by Friday", "I'll call you tomorrow", "I'll make the intro
   by EOW". Set is_commitment=true ONLY when you can answer: who promised
   what to whom, with a concrete deliverable.
-- COMMITMENT.WHAT MUST BE SELF-CONTAINED. The "what" field is read by a
-  downstream brief writer that does NOT see the prior thread. Always
-  resolve pronouns and antecedents from prior context BEFORE writing the
-  description. Name the specific person, object, deadline, or topic.
+- COMMITMENT.WHAT MUST BE A FULL CLAUSE WITH SUBJECT + VERB + OBJECT/RECIPIENT + TOPIC.
+  The "what" field is read by a downstream brief writer that does NOT see
+  the prior thread. It must stand on its own as a complete sentence.
+  REQUIRED components (when present in source or prior context):
+    1. SUBJECT — the speaker's first name (or "Gokhan" for [YOU]). Even
+       though commitment.who already says "user" or "counterparty", the
+       what field must spell out the name so it reads as a sentence.
+    2. ACTION VERB — what they will do (call, send, forward, write, meet, ...)
+    3. RECIPIENT or OBJECT — who is on the receiving end OR what is acted on.
+       NEVER write "the person", "the user", "him", "her", "them", "the
+       relevant person", "the recipient", "someone" — these words are BANNED
+       in the what field. Look in prior context and use the proper name.
+    4. TOPIC — what the action is about (specific subject matter).
+    5. TIMING / CONDITION — if mentioned in source.
+  BANNED phrases (NEVER use these — find the proper noun):
+    - "the person" / "the relevant person" / "the recipient"
+    - "the user" (use "Gokhan" instead)
+    - "him" / "her" / "them" / "someone"
+    - "the information" alone (specify what information)
+    - "the message" alone (specify which message / its content)
   BAD examples (DO NOT WRITE LIKE THIS):
-    - "tell the person"               → who is "the person"?
-    - "forward the information"       → what information? to whom?
-    - "call him"                      → call whom about what?
-    - "warn him again"                → about what?
+    - "tell the person"
+    - "forward the information"
+    - "call him"
+    - "make an announcement regarding May 1"        ← missing audience
+    - "report observations to the user"             ← "the user" → "Gokhan"
+    - "Baris will forward the information to the relevant person"
+                                                    ← BOTH "info" + "person" generic
   GOOD examples:
-    - "tell Salih about the cleaning arrangement at end of month"
-    - "forward the envelope details (10000 yen + katakana name) to Adnan"
-    - "call the school principal about the vacuum cleaner purchase"
-    - "warn the keiko host before next session about the late-arrival issue"
-  If the prior context lacks the antecedent, write what IS knowable
-  (e.g. "forward the most recent message to the recipient discussed
-  earlier in the thread") rather than just "forward it".
+    - "Baris will tell Salih about the cleaning arrangement at end of month"
+    - "Baris will forward the envelope details (10000 yen + katakana name 'Baranjemu Dyukeru') to Adnan"
+    - "Gokhan will call the school principal about the vacuum cleaner purchase"
+    - "Baris will warn Baran before next keiko session about the late-arrival issue"
+    - "Baris will announce the May 1 holiday schedule to the keiko group chat"
+    - "Baris will report yesterday's keiko observations to Gokhan tomorrow morning"
+  If after scanning prior context the recipient is genuinely unknowable,
+  write "(recipient unclear from context)" explicitly rather than using a
+  generic placeholder — that's a signal for downstream review, not a
+  filler word the brief should propagate.
 - THIRD-PARTY RULE: only first-person pledges count. "He'll call", "They'll
   deliver", "She will arrive" are NOT commitments by the speaker — they are
   reports about a third party. Set is_commitment=false in these cases.
