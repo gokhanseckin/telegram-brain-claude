@@ -41,19 +41,27 @@ _REVIEW_MARKER = "(recipient unclear from context)"
 def _sanitize_recipient(what: str) -> tuple[str, bool]:
     """If `what` contains a banned recipient placeholder, replace it with the
     review marker. Returns (sanitized_what, was_modified).
+
+    Handles two awkward LLM patterns:
+      A. plain leak — "tell the person about X" → "tell (marker) about X"
+      B. hybrid leak — "tell the person (marker) about X" — LLM hedged. Drop
+         the banned phrase entirely so we don't end up with two markers.
     """
     if not isinstance(what, str) or not what:
         return what, False
-    lower = what.lower()
-    # Pad with spaces so we catch leading/trailing pronoun matches.
-    padded = f" {lower} "
+    import re as _re
+    padded = f" {what.lower()} "
     hit = next((p for p in _BANNED_RECIPIENT_PHRASES if p in padded), None)
     if hit is None:
         return what, False
-    # Replace case-insensitively, preserving rest of string.
-    import re as _re
     pattern = _re.compile(_re.escape(hit.strip()), _re.IGNORECASE)
-    new_what = pattern.sub(_REVIEW_MARKER, what, count=1)
+    if _REVIEW_MARKER in what:
+        # Hybrid case: marker already present, just strip the banned phrase.
+        new_what = pattern.sub("", what, count=1)
+    else:
+        new_what = pattern.sub(_REVIEW_MARKER, what, count=1)
+    # Collapse double spaces from removal.
+    new_what = _re.sub(r"\s{2,}", " ", new_what).strip()
     return new_what, True
 
 
