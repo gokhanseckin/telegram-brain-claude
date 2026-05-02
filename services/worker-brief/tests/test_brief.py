@@ -176,7 +176,7 @@ def test_radar_alerts_stamped_noop_when_empty():
 # ---------------------------------------------------------------------------
 
 def test_trigger_file_causes_immediate_run(tmp_path, monkeypatch):
-    """check_trigger_file runs brief and deletes the file when it exists."""
+    """check_trigger_file runs brief (with drain) and deletes the file when it exists."""
     trigger_path = str(tmp_path / "tbc_trigger_brief")
     # Create the trigger file
     open(trigger_path, "w").close()
@@ -185,15 +185,15 @@ def test_trigger_file_causes_immediate_run(tmp_path, monkeypatch):
 
     run_called = []
 
-    def fake_run_brief():
+    def fake_run_brief_with_drain():
         run_called.append(True)
 
-    monkeypatch.setattr("tbc_worker_brief.main.run_brief", fake_run_brief)
+    monkeypatch.setattr("tbc_worker_brief.main.run_brief_with_drain", fake_run_brief_with_drain)
 
     from tbc_worker_brief.main import check_trigger_file
     check_trigger_file()
 
-    assert run_called, "run_brief should have been called"
+    assert run_called, "run_brief_with_drain should have been called"
     assert not os.path.exists(trigger_path), "trigger file should be deleted"
 
 
