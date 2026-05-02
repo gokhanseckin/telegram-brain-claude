@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-05-02 — Understanding decoupled from cron, coupled to brief
+
+The understanding worker no longer runs the LLM (Gemma) pass on a 5-second polling loop. Instead the heavy LLM pass is now **step 1 of every brief** — both the 07:00 cron and the on-demand `/brief` trigger drain the LLM-understanding queue first, then generate the brief. This guarantees every brief reflects the latest messages without paying for LLM calls between briefs. Embeddings (`bge-m3`) stay real-time via a lightweight 5-second loop so semantic_search / MCP tools remain fresh between briefs.
+
+### What changed
+
+- **New mode env**: `TBC_UNDERSTANDING_MODE=brief-coupled` (default) | `continuous`. The continuous mode preserves the legacy 5s LLM polling loop as a fallback.
+- **worker-understanding** in brief-coupled mode runs two concurrent loops:
+  - `embed_loop` (every 5s) — embeds new messages into `bge-m3`, writes partial rows at `model_version="embeddings-only-<YYYY-MM-DD>"`.
+  - `trigger_watcher` (every 30s) — drains the LLM queue when `/tmp/tbc_trigger_understanding` appears.
+- **worker-brief** wraps `run_brief()` in `run_brief_with_drain()` — counts pending LLM-understanding rows, touches `/tmp/tbc_trigger_understanding`, polls until the queue is empty (or `TBC_BRIEF_PRE_UNDERSTANDING_TIMEOUT_S` fires, default 300s), then generates the brief. Used by both the cron-fired and trigger-fired briefs.
+- **Shared queue helpers**: `tbc_common.db.understanding_queue.pending_understanding_rows / pending_understanding_count` consolidate the SQL previously inline in worker-understanding's `_poll`.
+- **v13 untouched**: prompt rules, `MODEL_VERSION`, `process_message_batch`, the `_sanitize_recipient` guard in worker-commitments — all byte-identical. Only orchestration changed.
+
+### To revert
+
+`TBC_UNDERSTANDING_MODE=continuous` + restart `tbc-worker-understanding`. The brief drain helper still works — it just sees the queue at 0 immediately because the continuous loop is keeping up in real time.
+
+---
+
 ## 2026-05-01 / 2026-05-02 — Understanding worker quality pass (v1 → v13)
 
 13 `MODEL_VERSION` iterations on the understanding worker to drive commitment quality from ~50% precision (Qwen 7B) to **0 banned-phrase noun-placeholder leaks** on Gemma 4 26B (4B-active MoE via [novita.ai](https://novita.ai)). Provider stack and architecture stabilised; full session log in [`docs/session-2026-05-01-understanding-worker-iteration.md`](docs/session-2026-05-01-understanding-worker-iteration.md).

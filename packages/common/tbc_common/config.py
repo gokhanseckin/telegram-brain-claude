@@ -72,6 +72,17 @@ class Settings(BaseSettings):
     brief_time: str = Field(default="07:00", validation_alias="TBC_BRIEF_TIME")
     weekly_day: str = Field(default="Monday", validation_alias="TBC_WEEKLY_DAY")
     weekly_time: str = Field(default="08:00", validation_alias="TBC_WEEKLY_TIME")
+    # When TBC_UNDERSTANDING_MODE=brief-coupled the worker only runs the LLM
+    # pass on demand (triggered by the brief). When =continuous it keeps the
+    # legacy 5-second polling loop. The brief worker waits up to
+    # TBC_BRIEF_PRE_UNDERSTANDING_TIMEOUT_S seconds for the queue to drain
+    # before generating the brief.
+    understanding_mode: str = Field(
+        default="brief-coupled", validation_alias="TBC_UNDERSTANDING_MODE"
+    )
+    brief_pre_understanding_timeout_s: int = Field(
+        default=300, validation_alias="TBC_BRIEF_PRE_UNDERSTANDING_TIMEOUT_S"
+    )
 
     # MCP server
     mcp_bearer_token: SecretStr | None = Field(default=None, validation_alias="TBC_MCP_BEARER_TOKEN")
