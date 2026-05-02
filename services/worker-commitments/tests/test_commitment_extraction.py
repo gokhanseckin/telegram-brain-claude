@@ -67,7 +67,7 @@ def test_duplicate_not_created(session: Session):
     from tbc_worker_commitments.extractor import extract_commitments
 
     _mu(session, chat_id=10, message_id=2, is_commitment=True,
-        commitment={"who": "counterparty", "what": "Will send contract", "due": None, "confidence": 3})
+        commitment={"who": "counterparty", "what": "Will send contract", "due": None, "confidence": 4})
 
     extract_commitments(session)
     extract_commitments(session)

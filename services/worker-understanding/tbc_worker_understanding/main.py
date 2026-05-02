@@ -14,7 +14,10 @@ from tbc_common.db.session import get_sessionmaker
 from tbc_common.db.tags import get_active_tags
 from tbc_common.logging import configure_logging
 from tbc_common.prompts import MODEL_VERSION
-from tbc_common.prompts.understanding import build_understanding_system, build_understanding_system_batched
+from tbc_common.prompts.understanding import (
+    build_understanding_system,
+    build_understanding_system_batched,
+)
 
 from .ollama_client import OllamaClient
 from .processor import process_message, process_message_batch
@@ -162,7 +165,7 @@ async def run_loop() -> None:
                 )
                 cum = sum(len(m.text or "") * 4 for m in msgs)
                 if msgs:
-                    chat_breakdown = {}
+                    chat_breakdown: dict[int, int] = {}
                     for m in msgs:
                         chat_breakdown[m.chat_id] = chat_breakdown.get(m.chat_id, 0) + 1
                     log.info(
