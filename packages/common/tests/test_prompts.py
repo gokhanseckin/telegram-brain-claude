@@ -84,7 +84,18 @@ def test_brief_prompt_has_quiet_period_rule() -> None:
 
 def test_brief_prompt_instructs_short_id_preservation() -> None:
     """The brief LLM must be told to preserve `(c<id>)` commitment tags
-    inline in ON YOUR PLATE / WAITING ON OTHERS so the user can mark
-    them later. Without this, the rendered (c<id>) on input rows can
-    silently get dropped from the output."""
+    in ON YOUR PLATE / WAITING ON OTHERS so the user can mark them
+    later. Without this, the rendered (c<id>) on input rows can
+    silently get dropped from the output.
+
+    Also enforces one-commitment-per-bullet: if a person has multiple
+    open commitments, they must get multiple bullets each ending with
+    their own (c<id>), not a single grouped bullet trailing
+    `(c1) (c2)` — that batched form breaks `done c<id>` resolution.
+    """
     assert "(c<id>)" in BRIEF_SYSTEM
+    # Normalize whitespace so wrapped phrases still match.
+    flat = " ".join(BRIEF_SYSTEM.split())
+    assert "One commitment per bullet" in flat
+    assert "one tag per bullet" in flat
+    assert "one bullet per commitment" in flat

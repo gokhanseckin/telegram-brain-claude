@@ -236,10 +236,16 @@ def test_render_commitment_short_id_with_due_date():
 
 def test_brief_format_spec_preserves_short_id_instruction():
     """The format spec passed to the LLM must explicitly tell it to keep
-    the (c<id>) tag inline in ON YOUR PLATE / WAITING ON OTHERS."""
+    the (c<id>) tag in ON YOUR PLATE / WAITING ON OTHERS, and must
+    require one-commitment-per-bullet so multiple commitments for the
+    same person never collapse into a single bullet with batched
+    `(c1) (c2)` tags at the end."""
     from tbc_worker_brief.assembler import BRIEF_FORMAT_SPEC
 
     assert "(c<id>)" in BRIEF_FORMAT_SPEC
+    assert "One commitment per bullet" in BRIEF_FORMAT_SPEC
+    assert "one tag per bullet" in BRIEF_FORMAT_SPEC
+    assert "MULTIPLE bullets" in BRIEF_FORMAT_SPEC
 
 
 def test_trigger_file_no_run_when_absent(tmp_path, monkeypatch):

@@ -39,10 +39,16 @@ sections, in this order:
    and personal. Rank by "who's been waiting longest x how much it matters
    to them," not by deal size. A friend's unanswered question from 5 days
    ago can outrank a vendor follow-up. One line each: who, what, how stale.
-   IMPORTANT: when the underlying input row carries a `(c<id>)` tag (open
-   commitments), include that tag in parentheses at the end of the bullet
-   so the user can mark it later. Items synthesized from raw 24h messages
-   without a commitment row get no parenthetical.
+   IMPORTANT — COMMITMENT TAGS: every bullet sourced from an Open
+   Commitments input row MUST end with that row's `(c<id>)` tag in
+   parentheses. One commitment per bullet, one tag per bullet, placed at
+   the very end. If a person has more than one open commitment, write one
+   bullet per commitment — do NOT collapse them into a single grouped
+   bullet with multiple `(c<id>)` tags at the end. The user uses each tag
+   to mark that specific commitment done (`done c<id>`) or cancel it
+   (`cancel c<id>`); batched tags break that resolution. Bullets
+   synthesized from raw 24h messages without a commitment row get no
+   parenthetical.
 
 3. 🔔 WAITING ON OTHERS
    Things the user is waiting for — replies, deliverables, intros, RSVPs.
