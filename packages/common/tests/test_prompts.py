@@ -59,9 +59,27 @@ def test_brief_prompt_has_sections() -> None:
 def test_brief_prompt_dropped_temperature_section() -> None:
     """TEMPERATURE CHECK was removed — relationship cooling/warming gets
     folded into WORTH NOTICING or ON YOUR PLATE instead. Regression
-    catches an accidental re-introduction."""
+    catches an accidental re-introduction. Also: the brief must never
+    use the CRM-speak word "temperature" in its output, only as a
+    negative instruction telling the LLM to avoid it."""
     assert "TEMPERATURE CHECK" not in BRIEF_SYSTEM
     assert "🌡️" not in BRIEF_SYSTEM
+    # The only allowed mention is the explicit instruction not to use it.
+    assert BRIEF_SYSTEM.count("temperature") <= 1
+
+
+def test_brief_prompt_preserves_worth_noticing_ref_tags() -> None:
+    """Each WORTH NOTICING bullet sourced from a radar alert must end
+    with its (#xxxx) tag so the user can DM `#xxxx useful` to rate it.
+    Regression for the user-reported disappearance of these tags."""
+    assert "(#xxxx)" in BRIEF_SYSTEM or "#xxxx" in BRIEF_SYSTEM
+    assert "ref=#xxxx" in BRIEF_SYSTEM
+
+
+def test_brief_prompt_has_quiet_period_rule() -> None:
+    """Friend/family/personal chats should not get reach-out nudges
+    unless they've been quiet for 7+ days."""
+    assert "7+ days" in BRIEF_SYSTEM or "7 days" in BRIEF_SYSTEM
 
 
 def test_brief_prompt_instructs_short_id_preservation() -> None:

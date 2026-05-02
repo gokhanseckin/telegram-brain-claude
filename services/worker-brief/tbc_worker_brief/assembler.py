@@ -61,12 +61,12 @@ Output exactly five sections in order:
 1. 🌅 THE SHAPE OF TODAY — one short paragraph; honest tone of the day
 2. ✅ ON YOUR PLATE — others waiting on user; mix work + personal; rank by waiting-time x importance. CRITICAL: when an Open Commitments input row carries a `(c<id>)` tag, INCLUDE that tag inline at the end of the bullet so the user can reply later. Format: `• <description>. <context>. (c<id>)`. Drop the tag only for items synthesized from raw 24h messages that have no commitment row.
 3. 🔔 WAITING ON OTHERS — user waiting on others; flag chase-worthy and say HOW to nudge. Same `(c<id>)` rule as #2: preserve the tag from any Open Commitments row.
-4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat. CRITICAL: when the underlying input row carries a `ref=#xxxx` tag (radar alerts), include that tag in parentheses IMMEDIATELY after the specific observation it refers to — not at the end of the whole bullet. Each radar alert must appear as its own observation with its own (#xxxx) inline. NEVER merge multiple (#xxxx) tags at the end of a bullet. Format: `• [Name / @username / tag] — <observation A> (#xxxx). <observation B> (#yyyy).`. Items synthesized from raw 24h messages without a ref tag get no parenthetical. Avoid redundancy: skip a person from WORTH NOTICING if they already appear in ON YOUR PLATE or WAITING ON OTHERS and the signal adds nothing beyond the commitment already surfaced.
+4. 💡 WORTH NOTICING — 3-6 cross-chat signals (business AND personal); name signal + human response + chat. CRITICAL: every bullet that comes from a radar input row tagged `ref=#xxxx` MUST end with that tag in parentheses. One tag per bullet, placed at the very end. Format: `• [Name / @username / tag] — <observation>. (#xxxx)`. Bullets synthesized from raw 24h messages without a ref tag get no parenthetical. QUIET-PERIOD RULE: for chats tagged friend/family/personal, do NOT suggest reaching out / checking in / sending a note unless that chat has been quiet for 7+ days (see "Relationship Signals" — last heard date). Avoid redundancy: skip a person from WORTH NOTICING if they already appear in ON YOUR PLATE or WAITING ON OTHERS and the signal adds nothing beyond the commitment already surfaced.
 5. 🎯 IF YOU ONLY DO THREE THINGS — one paragraph, the three moves
-Note: relationship temperature/state changes are still provided in the
-input as background context — fold relevant ones into "WORTH NOTICING"
-(if signal-shaped) or "ON YOUR PLATE" (if a nudge is owed). Do NOT
-write a dedicated temperature section.
+Note: relationship signals are provided as background context — fold
+relevant ones into "WORTH NOTICING" (if signal-shaped) or "ON YOUR
+PLATE" (if a nudge is owed). Do NOT write a dedicated relationship
+section, and never use the word "temperature" in your output.
 Recency rules (strict):
 - The fresh input begins with "Today is YYYY-MM-DD". Anchor every claim
   against that date. Never imply something is "now" or "today" if its
@@ -374,7 +374,7 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
 
     # --- Relationship state deltas ---
     lines.append("")
-    lines.append("## Relationship Temperature Changes (vs last week)")
+    lines.append("## Relationship Signals (last 7 days)")
 
     rs_changed = session.execute(
         select(RelationshipState)
@@ -382,14 +382,39 @@ def build_fresh_input(session: Session) -> tuple[str, list[int]]:
         .order_by(RelationshipState.updated_at.desc())
     ).scalars().all()
 
-    if rs_changed:
-        for rs in rs_changed:
-            chat = session.get(Chat, rs.chat_id)
-            chat_title = (chat.title if chat else None) or f"chat_{rs.chat_id}"
-            lines.append(
-                f"- {chat_title}: stage={rs.stage}, temperature={rs.temperature} (updated {rs.updated_at.strftime('%Y-%m-%d')})"
-            )
-    else:
+    QUIET_TAGS = {"family", "personal", "friend"}
+    seven_days_ago = datetime.now(UTC) - timedelta(days=7)
+    TEMP_LABELS = {
+        "cooling": "going quiet",
+        "warming": "warming up",
+        "stable": "steady",
+    }
+
+    emitted_rs = 0
+    for rs in rs_changed:
+        chat = session.get(Chat, rs.chat_id)
+        # Quiet-period rule: for friend/family/personal, only surface if the
+        # counterparty hasn't messaged in 7+ days. Otherwise the brief nags
+        # about reaching out to people the user just talked to.
+        if (
+            chat
+            and chat.tag in QUIET_TAGS
+            and rs.last_counterparty_message_at
+            and rs.last_counterparty_message_at >= seven_days_ago
+        ):
+            continue
+        chat_title = (chat.title if chat else None) or f"chat_{rs.chat_id}"
+        label = TEMP_LABELS.get(rs.temperature or "", rs.temperature or "n/a")
+        last_cp = (
+            rs.last_counterparty_message_at.strftime("%Y-%m-%d")
+            if rs.last_counterparty_message_at
+            else "?"
+        )
+        lines.append(
+            f"- {chat_title}: {label} (last heard from them {last_cp}, updated {rs.updated_at.strftime('%Y-%m-%d')})"
+        )
+        emitted_rs += 1
+    if emitted_rs == 0:
         lines.append("(no changes)")
 
     # --- Last 14 days brief feedback ---
