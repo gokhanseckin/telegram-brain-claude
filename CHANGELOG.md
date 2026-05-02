@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-05-01 / 2026-05-02 — Understanding worker quality pass (v1 → v13)
+
+13 `MODEL_VERSION` iterations on the understanding worker to drive commitment quality from ~50% precision (Qwen 7B) to **0 banned-phrase noun-placeholder leaks** on Gemma 4 26B (4B-active MoE via [novita.ai](https://novita.ai)). Provider stack and architecture stabilised; full session log in [`docs/session-2026-05-01-understanding-worker-iteration.md`](docs/session-2026-05-01-understanding-worker-iteration.md).
+
+### How the understanding worker runs (current)
+
+`services/worker-understanding/tbc_worker_understanding/`
+
+- **Provider:** novita.ai, model `google/gemma-4-26b-a4b-it`. Selected by `TBC_UNDERSTANDING_PROVIDER=novita` + `TBC_UNDERSTANDING_NOVITA_MODEL`. Routing in `ollama_client.py` supports `ollama|deepseek|novita`.
+- **Batching:** chat-aware (`main.py:_assemble_chat_aware_batch`). Polls a 3-day window. If any chat has ≥20 pending messages, the entire batch comes from that one chat (coherent thread). Otherwise round-robin across the top 3 chats, each emitted as a contiguous block. Defaults: `BATCH_MAX_N=20`, `MAX_CHATS_PER_BATCH=3`, `BATCH_CHAR_BUDGET=60000`.
+- **Prompt structure** (`packages/common/tbc_common/prompts/understanding.py` + `processor.py:process_message_batch`):
+  - System prompt opens with a **WHY section** — explains the brief-generation purpose, that false commitments cost the user real time, "precision over recall", "default `is_commitment=false`".
+  - User prompt = `BATCH OVERVIEW` (chat count + cross-chat warning if >1) → per-chat blocks with title / type / tag headers and a **speaker registry** (`YOU = Gokhan` + others) → enumerated messages with prior context (7 msgs) and a per-message **REMINDER** footer that names the formatting requirement adjacent to the input.
+  - The **COMMITMENT.WHAT formatting block** sits at the END of the system prompt (recency bias) with banned-phrase list, GOOD vs BAD examples, and the literal `(recipient unclear from context)` escape hatch.
+- **Output:** single envelope `{"results": [{...}, ...]}` with each result echoing its `id` for matching. Schema fields all default-able for resilience against the model dropping fields on big batches (`schema.py`).
+
+### How commitments are extracted (current)
+
+`services/worker-commitments/tbc_worker_commitments/extractor.py`
+
+- Polls `message_understanding` for rows where `is_commitment=true` and no commitment yet exists for `(chat_id, source_message_id)`.
+- **Programmatic banned-phrase guard** (`_sanitize_recipient`) — runs BEFORE the confidence gate:
+  - Detects noun-phrase placeholders the LLM occasionally still emits: `"the recipient"`, `"the relevant person"`, `"the intended recipient"`, `"the person"`, `"the user"`, `"someone"`. Pronouns (`him`/`her`/`them`) deliberately excluded — they're valid with a local antecedent in the same sentence.
+  - Hits → rewrites to `(recipient unclear from context)` and **drops confidence by 1**. Hybrid case (LLM wrote both banned phrase AND marker) — strips the banned phrase so we don't end up with two markers.
+  - Net effect: high-conf leaks survive but with a deterministic review marker; low-conf leaks (≥4 → 3) fall below the threshold and never become commitments.
+- **Confidence gate:** `confidence < 4 → drop`. Anything below is logged as `commitment_skipped_low_confidence` and never reaches the brief.
+- Sanitiser firings are logged as `banned_recipient_phrase_sanitized` for observability.
+
+### Final v13 quality
+
+- **5 active commitments** generated under v13 on the post-cleanup 3-day window, **0 banned-phrase leaks** at the LLM level. The one hybrid-leak case (`"tell the person (recipient unclear from context) immediately"`) was caught by the sanitiser and dropped below the conf threshold.
+- The two worst v12 failure cases (Turkish acks `"Tamamdır söylüyorum"` / `"Hemen iletiyorum"` — generic "I'm telling / forwarding" with antecedent beyond the visible window) are now correctly classified as `is_commitment=false` thanks to the new ack-style rule (`"if you have to infer the deliverable from prior context, set is_commitment=false"`).
+- 9 stale v8/v11/v12 commitment rows removed in two batches (per [`CLAUDE.md`](CLAUDE.md) data-deletion confirmation rule) so the brief sees only v13 verdicts.
+
+### What's exhausted on Gemma 4
+
+The prompt-side toolbox is fully spent — anything left points at the model. If quality regresses or new failure modes appear, escalate via: prior context window 7 → 10 (env), batch size 20 → 15, Gemma 4 31B (heavier MoE), or Sonnet for understanding (~25× cost but volume is low). The deterministic `_sanitize_recipient` guard is permanent regardless of model — extend `_BANNED_RECIPIENT_PHRASES` if new generic placeholders show up.
+
+---
+
 ## 2026-04-23 — CI hygiene: lint-and-test green for the first time
 
 ### ci: fix mypy strict + pytest collection on main ([#22](https://github.com/gokhanseckin/telegram-brain-claude/pull/22))
