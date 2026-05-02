@@ -14,7 +14,10 @@ from tbc_common.db.session import get_sessionmaker
 from tbc_common.db.tags import get_active_tags
 from tbc_common.logging import configure_logging
 from tbc_common.prompts import MODEL_VERSION
-from tbc_common.prompts.understanding import build_understanding_system, build_understanding_system_batched
+from tbc_common.prompts.understanding import (
+    build_understanding_system,
+    build_understanding_system_batched,
+)
 
 from .ollama_client import OllamaClient
 from .processor import process_message, process_message_batch

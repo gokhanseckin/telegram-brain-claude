@@ -382,7 +382,7 @@ async def process_message_batch(
         chat_blocks.append("\n".join(chat_header) + "\n\n".join(msg_blocks))
 
     overview_lines = [
-        f"=== BATCH OVERVIEW ===",
+        "=== BATCH OVERVIEW ===",
         f"This batch contains {len(messages)} messages from {len(by_chat)} "
         f"{'chat' if len(by_chat) == 1 else 'DIFFERENT chats'}.",
     ]
@@ -453,7 +453,7 @@ async def process_message_batch(
     pending_resolves: list[tuple[int, int]] = []  # (resolver_idx, target_idx)
 
     success = 0
-    for idx, (message, emb) in enumerate(zip(messages, embeddings), start=1):
+    for idx, (message, emb) in enumerate(zip(messages, embeddings, strict=False), start=1):
         raw_obj = by_id.get(idx)
         if raw_obj is None:
             log.warning(
@@ -569,4 +569,3 @@ async def process_message_batch(
         commitments=sum(1 for r in results_raw if isinstance(r, dict) and r.get("is_commitment")),
     )
     return success
-
