@@ -165,7 +165,7 @@ async def run_loop() -> None:
                 )
                 cum = sum(len(m.text or "") * 4 for m in msgs)
                 if msgs:
-                    chat_breakdown = {}
+                    chat_breakdown: dict[int, int] = {}
                     for m in msgs:
                         chat_breakdown[m.chat_id] = chat_breakdown.get(m.chat_id, 0) + 1
                     log.info(

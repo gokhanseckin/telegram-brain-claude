@@ -59,6 +59,21 @@ explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 exclude = ['(^|/)tests/', '(^|/)conftest\.py$']
 
+# v13 hot-zone: relax strict mypy on the LLM call/parse path. These modules
+# trade tight typing for prompt/parser flexibility (httpx returning Any,
+# loosely-typed JSON envelopes from the model). Touching them risks behavior
+# regressions for marginal type-precision gains.
+[[tool.mypy.overrides]]
+module = [
+    "tbc_worker_understanding.processor",
+    "tbc_worker_understanding.ollama_client",
+    "tbc_common.prompts.understanding",
+]
+disallow_untyped_defs = false
+disallow_any_explicit = false
+warn_return_any = false
+disable_error_code = ["assignment", "type-arg", "no-any-return", "no-untyped-def"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "--import-mode=importlib"

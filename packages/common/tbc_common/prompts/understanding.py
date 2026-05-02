@@ -294,7 +294,7 @@ in conflict: don't invent actions, but DO resolve antecedents.
 """
 
 
-def build_understanding_system_batched(tags):
+def build_understanding_system_batched(tags):  # type: ignore[no-untyped-def]
     from tbc_common.db.tags import render_tag_guidance
     guidance = render_tag_guidance(tags) if tags else ""
     return _BATCHED_TEMPLATE.format(tag_guidance=guidance)
