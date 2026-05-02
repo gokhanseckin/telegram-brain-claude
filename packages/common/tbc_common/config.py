@@ -46,9 +46,29 @@ class Settings(BaseSettings):
     novita_api_key: SecretStr | None = Field(default=None, validation_alias="NOVITA_API_KEY")
     novita_model: str = Field(default="google/gemma-3-27b-it", validation_alias="TBC_NOVITA_MODEL")
 
-    # Provider selection for brief + weekly workers and the tg-bot agent.
+    # Provider selection for brief + weekly workers and (by default) the tg-bot agent.
     # Valid values: "anthropic", "deepseek", "novita"
     llm_provider: str = Field(default="deepseek", validation_alias="TBC_LLM_PROVIDER")
+
+    # Bot agent — independent of brief/weekly. Empty defaults fall back to the
+    # brief/weekly equivalents so existing deployments are unaffected.
+    bot_llm_provider: str = Field(default="", validation_alias="TBC_BOT_LLM_PROVIDER")
+    bot_anthropic_model: str = Field(default="", validation_alias="TBC_BOT_ANTHROPIC_MODEL")
+    bot_deepseek_model: str = Field(default="", validation_alias="TBC_BOT_DEEPSEEK_MODEL")
+    bot_novita_model: str = Field(default="", validation_alias="TBC_BOT_NOVITA_MODEL")
+
+    def bot_provider(self) -> str:
+        return self.bot_llm_provider or self.llm_provider
+
+    def bot_model(self) -> str:
+        p = self.bot_provider()
+        if p == "anthropic":
+            return self.bot_anthropic_model or self.brief_model
+        if p == "deepseek":
+            return self.bot_deepseek_model or "deepseek-chat"
+        if p == "novita":
+            return self.bot_novita_model or self.novita_model
+        raise ValueError(f"Unknown bot provider: {p!r}")
 
     # Telegram userbot
     tg_api_id: int | None = Field(default=None, validation_alias="TBC_TG_API_ID")

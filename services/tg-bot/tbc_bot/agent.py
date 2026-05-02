@@ -98,7 +98,7 @@ async def _ask_anthropic(history: list[dict[str, Any]], user_text: str) -> str:
     messages = [*history, {"role": "user", "content": user_text}]
 
     response = await client.beta.messages.create(
-        model=settings.brief_model,
+        model=settings.bot_model(),
         max_tokens=4096,
         system=SYSTEM_PROMPT,
         messages=messages,  # type: ignore[arg-type]
@@ -160,7 +160,7 @@ async def _ask_deepseek(history: list[dict[str, Any]], user_text: str) -> str:
 
     for iteration in range(_MAX_TOOL_ITERATIONS):
         response = await client.chat.completions.create(
-            model="deepseek-chat",
+            model=settings.bot_model(),
             max_tokens=4096,
             messages=messages,
             tools=tools,
@@ -235,7 +235,7 @@ async def _ask_novita(history: list[dict[str, Any]], user_text: str) -> str:
 
     for iteration in range(_MAX_TOOL_ITERATIONS):
         response = await client.chat.completions.create(
-            model=settings.novita_model,
+            model=settings.bot_model(),
             max_tokens=4096,
             messages=messages,
             tools=tools,
@@ -282,7 +282,7 @@ async def _ask_novita(history: list[dict[str, Any]], user_text: str) -> str:
 
 async def ask(history: list[dict[str, Any]], user_text: str) -> str:
     """Call the configured LLM with MCP access. Returns the response text."""
-    provider = settings.llm_provider
+    provider = settings.bot_provider()
     if provider == "anthropic":
         return await _ask_anthropic(history, user_text)
     if provider == "deepseek":
