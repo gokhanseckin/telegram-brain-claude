@@ -409,9 +409,6 @@ async def process_message_batch(
             except json.JSONDecodeError:
                 parsed = None
 
-    # TEMP DIAG: capture raw on every batch to see model output shape
-    log.warning("batch_raw_diag", n=len(messages), raw=(raw_content or "")[:2000])
-
     if parsed is None or not isinstance(parsed, dict) or "results" not in parsed:
         log.warning(
             "batch_parse_failed",
@@ -424,12 +421,7 @@ async def process_message_batch(
 
     results_raw = parsed.get("results")
     if not isinstance(results_raw, list):
-        log.warning(
-            "batch_results_not_list",
-            n=len(messages),
-            results_type=type(results_raw).__name__,
-            results_repr=repr(results_raw)[:1500],
-        )
+        log.warning("batch_results_not_list", n=len(messages))
         for m in messages:
             await _mark_parse_failed(m, session, ollama, embedding_model)
         return 0
