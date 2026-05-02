@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-05-02 — Per-task LLM provider/model independence + production switch to gemma-4-31b
+
+Each LLM-driven task can now pick its own provider and model. Bot replies (DMs) were previously forced to share `TBC_LLM_PROVIDER` + brief/weekly's model fields; now they have their own envs with empty-default fallback. Embeddings and the understanding worker were already independent. With all four routes split, the production config switched to a deliberate per-task mix.
+
+### What changed
+
+- **New bot envs** in [`packages/common/tbc_common/config.py`](packages/common/tbc_common/config.py): `TBC_BOT_LLM_PROVIDER`, `TBC_BOT_ANTHROPIC_MODEL`, `TBC_BOT_DEEPSEEK_MODEL`, `TBC_BOT_NOVITA_MODEL`. All default to empty string and fall back to the brief/weekly equivalents (`TBC_LLM_PROVIDER` + `TBC_BRIEF_MODEL` / hardcoded `"deepseek-chat"` / `TBC_NOVITA_MODEL`), so existing deployments are byte-identical until any new var is set.
+- **Two helpers**: `Settings.bot_provider()` returns the bot-specific provider with fallback; `Settings.bot_model()` resolves to the right per-provider model. The bot agent now reads via these helpers in [`services/tg-bot/tbc_bot/agent.py`](services/tg-bot/tbc_bot/agent.py) — four call sites updated (provider dispatch, anthropic model, deepseek model, novita model). Brief/weekly worker untouched.
+- **`.env.example`** documents the new vars and the fallback rule.
+
+### Production config now in effect (verified live on VPS)
+
+| Task | Provider | Model | Source of truth |
+|---|---|---|---|
+| Daily brief / weekly | anthropic | `claude-sonnet-4-6` | `/etc/tbc/env`: `TBC_LLM_PROVIDER=anthropic` + `TBC_BRIEF_MODEL=claude-sonnet-4-6` |
+| Bot DM replies | novita | `google/gemma-4-31b-it` | `/etc/tbc/env`: `TBC_BOT_LLM_PROVIDER=novita` + `TBC_BOT_NOVITA_MODEL=google/gemma-4-31b-it` |
+| Understanding worker | novita | `google/gemma-4-31b-it` | systemd drop-in `provider.conf`: `TBC_UNDERSTANDING_PROVIDER=novita` + `TBC_UNDERSTANDING_NOVITA_MODEL=google/gemma-4-31b-it` (was 26b-a4b-it) |
+| Embeddings | ollama | `bge-m3` | `/etc/tbc/env`: `TBC_EMBEDDING_MODEL=bge-m3` (always Ollama, no provider switch) |
+
+### End-to-end verification
+
+A trigger-fired brief on 2026-05-02 08:18 UTC drove the full pipeline through three providers in one run:
+
+- 08:18:56 — `tbc-worker-brief` detected `/tmp/tbc_trigger_brief`, saw 20 pending understanding rows, touched `/tmp/tbc_trigger_understanding`.
+- 08:19:22 — `tbc-worker-understanding` picked up the trigger, assembled a batch of 20 messages.
+- 08:21:05 — `POST https://api.novita.ai/v3/openai/chat/completions 200 OK` (gemma-4-31b, 103s round-trip for 20 messages).
+- 08:21:06 — `batch_processed n=20 success=20 commitments=0` (zero parse failures this run).
+- 08:21:11 — Brief saw drain done at elapsed_s=135.
+- 08:21:31 — `POST https://api.anthropic.com/v1/messages 200 OK` (claude-sonnet-4-6, brief generated, 19s).
+- 08:21:31 — Brief posted to Telegram, saved to DB.
+
+Throughout the run, `tbc-worker-understanding` issued `POST http://localhost:11434/api/embed 200 OK` against Ollama for every message — the embeddings path stays on bge-m3.
+
+### Known issues / follow-ups
+
+- **gemma-4-31b parse-failure rate is non-deterministic** at larger batch sizes. Same-shape batches: 20/20 success in one run, 15/15 schema-validation failures in another. Needs investigation — diagnosis prompt drafted for a separate session.
+- **First batch=20 attempt timed out** at the 5-min novita read timeout on 2026-05-02 08:00. Subsequent runs of the same shape completed in 8s (08:11) and 103s (08:21). Almost certainly a temp glitch; if it recurs, raise `NOVITA_BATCH_TIMEOUT` in [`services/worker-understanding/tbc_worker_understanding/ollama_client.py:14`](services/worker-understanding/tbc_worker_understanding/ollama_client.py:14).
+- **Secret hygiene**: `NOVITA_API_KEY` is currently inlined as a literal `Environment=` line in `/etc/systemd/system/tbc-worker-understanding.service.d/provider.conf` instead of `/etc/tbc/env`. Cleanup task queued separately.
+
+### Deploy notes
+
+- VPS `/etc/tbc/env` updated in place (added `TBC_BOT_LLM_PROVIDER` + `TBC_BOT_NOVITA_MODEL`).
+- Systemd drop-in `tbc-worker-understanding.service.d/provider.conf` had a duplicate `Environment="TBC_UNDERSTANDING_NOVITA_MODEL=…"` (last-line wins in systemd) — single line now, set to `google/gemma-4-31b-it`.
+- `systemctl daemon-reload && systemctl restart tbc-bot tbc-worker-understanding`. Brief/weekly didn't need a restart (no code path touched).
+
+---
+
 ## 2026-05-02 — Understanding decoupled from cron, coupled to brief
 
 The understanding worker no longer runs the LLM (Gemma) pass on a 5-second polling loop. Instead the heavy LLM pass is now **step 1 of every brief** — both the 07:00 cron and the on-demand `/brief` trigger drain the LLM-understanding queue first, then generate the brief. This guarantees every brief reflects the latest messages without paying for LLM calls between briefs. Embeddings (`bge-m3`) stay real-time via a lightweight 5-second loop so semantic_search / MCP tools remain fresh between briefs.
